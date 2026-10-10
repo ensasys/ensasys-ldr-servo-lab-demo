@@ -1,0 +1,2742 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>LDR - Servo Lab by Ensasys @ Ethan Htoon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout concept: an instrument-rack workbench. A tier-coloured tab rail runs
+   ESP32 > MQTT > Node-RED > InfluxDB > Dashboard; every view pairs a live readout with an editor. */
+:root{
+  --bg:#f1f4f3; --surface:#ffffff; --surface2:#e7ecea; --line:#cdd6d3; --fg:#14201e; --muted:#566864;
+  --accent:#0b7566; --on-accent:#ffffff;
+  --h-esp:#d6452a; --h-mqtt:#7547cf; --h-nr:#b8262c; --h-influx:#1c76cc; --h-dash:#0b7566;
+  --s1:#1f6fd1; --s2:#d9741a; --s3:#0e9a73; --s4:#8a55c9;
+  --ok:#188a54; --warn:#b97a06; --bad:#cf3434;
+  --code-bg:#f8faf9; --gutter:#9aaaa6;
+  --syn-kw:#8a3ab9; --syn-str:#17794b; --syn-num:#b0540a; --syn-com:#7a8b87; --syn-fn:#1b66c4;
+  --shadow:0 1px 2px rgba(20,32,30,.06);
+  --f-disp:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1514; --surface:#162120; --surface2:#1d2b29; --line:#2a3b38; --fg:#e2ebe8; --muted:#8ea39e;
+    --accent:#3cc2ac; --on-accent:#05211c;
+    --h-esp:#ff7a5c; --h-mqtt:#a98bff; --h-nr:#ff6e6e; --h-influx:#5aa9f0; --h-dash:#3cc2ac;
+    --s1:#5aa7ff; --s2:#f2a65a; --s3:#4cd3a6; --s4:#b79bff;
+    --ok:#4cc88a; --warn:#e6b23a; --bad:#ff6b6b;
+    --code-bg:#0b1110; --gutter:#5d726d;
+    --syn-kw:#c39bff; --syn-str:#7ddba6; --syn-num:#f0a860; --syn-com:#6f827d; --syn-fn:#7db8ff;
+    --shadow:none; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1514; --surface:#162120; --surface2:#1d2b29; --line:#2a3b38; --fg:#e2ebe8; --muted:#8ea39e;
+  --accent:#3cc2ac; --on-accent:#05211c;
+  --h-esp:#ff7a5c; --h-mqtt:#a98bff; --h-nr:#ff6e6e; --h-influx:#5aa9f0; --h-dash:#3cc2ac;
+  --s1:#5aa7ff; --s2:#f2a65a; --s3:#4cd3a6; --s4:#b79bff;
+  --ok:#4cc88a; --warn:#e6b23a; --bad:#ff6b6b;
+  --code-bg:#0b1110; --gutter:#5d726d;
+  --syn-kw:#c39bff; --syn-str:#7ddba6; --syn-num:#f0a860; --syn-com:#6f827d; --syn-fn:#7db8ff;
+  --shadow:none; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.app{max-width:1320px;margin:0 auto;padding-inline:16px;padding-block:14px 56px}
+h1,h2,h3{margin:0;font-family:var(--f-disp);text-wrap:balance}
+p{margin:0}
+code,.mono{font-family:var(--f-mono)}
+.num{font-variant-numeric:tabular-nums}
+
+/* header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-bottom:12px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand svg{flex:none}
+.brand h1{font-size:28px;font-weight:700;line-height:1;letter-spacing:.01em}
+.brand p{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:4px}
+.top-stats{display:flex;gap:20px;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:1px}
+.stat span{font-family:var(--f-disp);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat b{font-family:var(--f-mono);font-weight:500;font-size:14px;font-variant-numeric:tabular-nums}
+
+/* tabs */
+.tabs{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:16px;scrollbar-width:thin}
+.tab{appearance:none;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-1px;color:var(--muted);
+  font-family:var(--f-disp);font-weight:600;font-size:15px;letter-spacing:.07em;text-transform:uppercase;padding:10px 14px;cursor:pointer;
+  display:flex;align-items:center;gap:8px;white-space:nowrap}
+.tab::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--hue,var(--accent));flex:none}
+.tab:hover{color:var(--fg)}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--hue,var(--accent))}
+.tab:focus-visible,.btn:focus-visible,.seg button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.view{display:none}
+.view.on{display:block}
+
+/* layout */
+.row{display:grid;gap:16px;margin-bottom:16px}
+.c2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.c32{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.c23{grid-template-columns:minmax(0,2fr) minmax(0,3fr)}
+.c13{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+@media (max-width:920px){.c2,.c32,.c23,.c13{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;min-width:0;box-shadow:var(--shadow)}
+.card>.hd,.hd{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.hd h2{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.hd h2 i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:var(--hue,var(--accent))}
+.lead{color:var(--muted);max-width:78ch;margin-bottom:14px}
+.note{font-size:12px;color:var(--muted)}
+.scroll-x{overflow-x:auto;min-width:0}
+
+/* controls */
+.btn{appearance:none;font:600 13px var(--f-body);color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{appearance:none;border:0;background:none;color:var(--muted);font:600 12px var(--f-body);padding:7px 12px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:var(--accent);color:var(--on-accent)}
+.field{display:grid;grid-template-columns:110px minmax(0,1fr) 62px;gap:10px;align-items:center;margin-bottom:10px}
+.field label{font-size:12px;color:var(--muted)}
+.field output{font-family:var(--f-mono);font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+input[type=text],select,textarea.plain{font:13px var(--f-mono);color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;min-width:0}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px}
+.switch input{appearance:none;width:36px;height:20px;border-radius:10px;background:var(--line);position:relative;margin:0;cursor:pointer;transition:background .15s}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:transform .15s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(16px)}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 11px var(--f-disp);letter-spacing:.08em;text-transform:uppercase;padding:2px 9px;border-radius:99px;border:1px solid currentColor}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.ok{color:var(--ok)}.pill.warn{color:var(--warn)}.pill.bad{color:var(--bad)}.pill.mute{color:var(--muted)}
+
+/* readouts */
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px 16px}
+.kv div{display:flex;flex-direction:column;gap:1px}
+.kv span{font:600 11px var(--f-disp);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.kv b{font:500 20px var(--f-mono);font-variant-numeric:tabular-nums}
+.kv b small{font-size:12px;color:var(--muted);font-weight:400;margin-left:2px}
+.hwbox{border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.hwbox svg,.diagram svg{display:block;width:100%;height:auto}
+.diagram{min-width:700px}
+
+/* logs and tables */
+.log{font:11.5px/1.55 var(--f-mono);max-height:230px;overflow:auto;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;white-space:pre-wrap;word-break:break-all}
+.log .t{color:var(--muted)} .log .tp{color:var(--h-mqtt)} .log .err{color:var(--bad)} .log .wr{color:var(--warn)} .log .sys{color:var(--muted);font-style:italic}
+.tbl{width:100%;border-collapse:collapse;font:12px var(--f-mono);font-variant-numeric:tabular-nums}
+.tbl th{font:600 11px var(--f-disp);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);text-align:left;padding:5px 10px 5px 0;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);white-space:nowrap}
+.tbl td{padding:4px 10px 4px 0;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap}
+.tbl td.wrap{white-space:normal;word-break:break-all}
+.tbl-wrap{max-height:300px;overflow:auto;min-width:0}
+.empty{color:var(--muted);font-size:13px;padding:16px 0;text-align:center}
+
+/* IDE */
+.ide{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--code-bg);display:flex;flex-direction:column;min-width:0}
+.ide-bar{display:flex;align-items:stretch;justify-content:space-between;gap:8px;background:var(--surface2);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ide-tabs{display:flex;overflow-x:auto;min-width:0}
+.ide-tab{appearance:none;border:0;border-right:1px solid var(--line);background:none;color:var(--muted);font:12px var(--f-mono);padding:9px 14px;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
+.ide-tab:hover{color:var(--fg)}
+.ide-tab.on{background:var(--code-bg);color:var(--fg);border-bottom-color:var(--hue,var(--accent))}
+.ide-act{display:flex;align-items:center;gap:6px;padding:4px 8px}
+.ide-body{display:flex;height:var(--ide-h,400px);position:relative;min-height:0}
+.ide-gutter{flex:none;width:44px;overflow:hidden;background:var(--code-bg);border-right:1px solid var(--line);color:var(--gutter);font:12.5px/20px var(--f-mono);text-align:right;user-select:none;padding-top:10px}
+.ide-gutter div{padding-right:8px;white-space:pre}
+.ide-gutter .ln-err{color:var(--bad);font-weight:700}
+.ide-edit{position:relative;flex:1;min-width:0}
+.ide-hl,.ide-ta{position:absolute;inset:0;margin:0;padding:10px 12px;font:12.5px/20px var(--f-mono);tab-size:2;white-space:pre;border:0;letter-spacing:0}
+.ide-hl{overflow:hidden;color:var(--fg);pointer-events:none}
+.ide-ta{overflow:auto;background:transparent;color:transparent;caret-color:var(--fg);resize:none;outline:none;-webkit-text-fill-color:transparent}
+.ide-ta::selection{background:color-mix(in srgb,var(--accent) 35%,transparent);-webkit-text-fill-color:transparent}
+.ide-status{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;padding:5px 12px;border-top:1px solid var(--line);background:var(--surface2);font:11.5px var(--f-mono);color:var(--muted)}
+.ide-status .msg.ok{color:var(--ok)} .ide-status .msg.bad{color:var(--bad)}
+.k{color:var(--syn-kw)}.s{color:var(--syn-str)}.n{color:var(--syn-num)}.c{color:var(--syn-com);font-style:italic}.f{color:var(--syn-fn)}
+@media (max-width:640px){.ide-body{height:var(--ide-h-m,340px)}}
+
+/* dashboard */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tile span{font:600 11px var(--f-disp);letter-spacing:.11em;text-transform:uppercase;color:var(--muted)}
+.tile b{font:600 32px/1.1 var(--f-disp);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.tile b small{font:400 13px var(--f-body);color:var(--muted);margin-left:3px}
+.tile em{font-style:normal;font:12px var(--f-mono);color:var(--muted)}
+.tile.warn b{color:var(--warn)} .tile.bad b{color:var(--bad)}
+.dgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.dgrid .p4{grid-column:span 4}.dgrid .p5{grid-column:span 5}.dgrid .p6{grid-column:span 6}.dgrid .p7{grid-column:span 7}.dgrid .p8{grid-column:span 8}.dgrid .p12{grid-column:span 12}
+@media (max-width:920px){.dgrid>*{grid-column:span 12!important}}
+.chartbox{position:relative}
+canvas.chart{display:block;width:100%;height:210px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:3px;border-radius:2px;background:var(--c)}
+.legend i.dash{background:repeating-linear-gradient(90deg,var(--c) 0 4px,transparent 4px 7px)}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font:11.5px/1.45 var(--f-mono);box-shadow:0 4px 14px rgba(0,0,0,.18);z-index:5;white-space:nowrap;display:none}
+.perr{color:var(--bad);font:12px var(--f-mono);padding:10px 0;white-space:pre-wrap}
+
+/* node-red canvas */
+.nrbox{background:var(--surface2);border:1px solid var(--line);border-radius:8px;overflow:auto}
+.nrbox svg{display:block;min-width:900px;width:100%;height:auto}
+.nrnode{cursor:pointer}
+.nrnode:focus-visible rect.body{stroke:var(--accent);stroke-width:3}
+.nrnode.sel rect.body{stroke:var(--accent);stroke-width:3}
+
+/* misc */
+.toasts{position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(360px,calc(100vw - 28px))}
+.toast{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:6px;padding:9px 12px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+.toast b{font-family:var(--f-disp);letter-spacing:.06em;text-transform:uppercase;font-size:12px;display:block}
+details{border:1px solid var(--line);border-radius:6px;padding:8px 12px;background:var(--surface)}
+summary{cursor:pointer;font:600 13px var(--f-body)}
+details[open] summary{margin-bottom:8px}
+.apitbl td:first-child{color:var(--h-esp);white-space:nowrap;padding-right:14px}
+ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<style>
+.dg-t{font:700 15px var(--f-disp);fill:var(--fg);letter-spacing:.02em}
+.dg-s{font:11px var(--f-body);fill:var(--muted)}
+.dg-m{font:10px var(--f-mono);fill:var(--muted)}
+.dg-n{font:500 11px var(--f-mono);fill:var(--fg)}
+.dg-box{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+.dg-wire{fill:none;stroke:var(--muted);stroke-width:1.6;opacity:.75}
+.hwp{font:600 7.5px "JetBrains Mono",ui-monospace,monospace;fill:#cdd9d6}
+.hwm{font:600 7.5px "JetBrains Mono",ui-monospace,monospace;fill:#4a5250}
+.hwl{font:11px "IBM Plex Sans",system-ui,sans-serif;fill:#26332f}
+.hwbig{font:700 30px "Barlow Semi Condensed","Arial Narrow",sans-serif;fill:#14201e}
+.hwsub{font:500 11px "JetBrains Mono",ui-monospace,monospace;fill:#3b4a46}
+.hwcap{font:600 10px "Barlow Semi Condensed","Arial Narrow",sans-serif;fill:#52625e;letter-spacing:.1em;text-transform:uppercase}
+.gauge-wrap{display:flex;flex-direction:column;align-items:center}
+.gauge-wrap svg{width:100%;max-width:300px;height:auto}
+.g-val{font:700 34px var(--f-disp);fill:var(--fg)}
+.g-sub{font:12px var(--f-mono);fill:var(--muted)}
+.g-tick{font:10px var(--f-mono);fill:var(--muted)}
+.nrstat{font:10px var(--f-mono);fill:var(--muted)}
+.nrstat.bad{fill:var(--bad)}
+</style>
+<div class="app">
+<header class="top">
+  <div class="brand">
+    <svg width="42" height="42" viewBox="0 0 42 42" aria-hidden="true"><rect x="1" y="1" width="40" height="40" rx="9" fill="var(--accent)"/><path d="M8 29a13 13 0 0 1 26 0" fill="none" stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" opacity=".55"/><line id="brandArm" x1="21" y1="29" x2="21" y2="13" stroke="var(--on-accent)" stroke-width="3.5" stroke-linecap="round"/><circle cx="21" cy="29" r="3.6" fill="var(--on-accent)"/></svg>
+    <div><h1>LDR - Servo Lab by Ensasys @ Ethan Htoon</h1><p>ESP32 · MQTT · Node-RED · InfluxDB</p></div>
+  </div>
+  <div class="top-stats" aria-label="Simulation status">
+    <div class="stat"><span>Sim clock</span><b id="clk">--:--:--</b></div>
+    <div class="stat"><span>Broker msg/s</span><b id="mps">0.0</b></div>
+    <div class="stat"><span>Rows stored</span><b id="rows">0</b></div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Lab sections">
+  <button class="tab" role="tab" data-tab="lab" style="--hue:var(--accent)" aria-selected="true">Lab</button>
+  <button class="tab" role="tab" data-tab="esp" style="--hue:var(--h-esp)" aria-selected="false">ESP32</button>
+  <button class="tab" role="tab" data-tab="mqtt" style="--hue:var(--h-mqtt)" aria-selected="false">MQTT</button>
+  <button class="tab" role="tab" data-tab="nr" style="--hue:var(--h-nr)" aria-selected="false">Node-RED</button>
+  <button class="tab" role="tab" data-tab="influx" style="--hue:var(--h-influx)" aria-selected="false">InfluxDB</button>
+  <button class="tab" role="tab" data-tab="dash" style="--hue:var(--h-dash)" aria-selected="false">Dashboard</button>
+  <button class="tab" role="tab" data-tab="stack" style="--hue:var(--muted)" aria-selected="false">Real stack</button>
+</nav>
+
+<!-- LAB -->
+<section id="v-lab" class="view on">
+  <p class="lead">A complete servo control loop running in your browser. You control only the lamp. An LDR measures its light, the ESP32 firmware turns that brightness into a servo angle and reads the position back, publishes the readings over MQTT, Node-RED stores them in InfluxDB, and the dashboard queries them with SQL. Three minutes of history were recorded when the page opened. Every stage has an editor, so change the code and watch the data change.</p>
+  <div class="card" style="margin-bottom:16px">
+    <div class="hd"><h2>Data path</h2><span class="note">Dots are real messages moving between the simulated services.</span></div>
+    <div class="scroll-x"><div class="diagram" id="diagram"></div></div>
+  </div>
+  <div class="row c32">
+    <div class="card">
+      <div class="hd"><h2>Bench</h2><span class="pill ok" id="hwLink">Wi-Fi up</span></div>
+      <div class="hwbox" id="hw"></div>
+      <div class="hwbox" id="hw2" style="margin-top:12px"></div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="hd"><h2>Controls</h2><span class="note">The lamp is the only input</span></div>
+        <div class="field"><label for="lamp">Lamp brightness</label><input type="range" id="lamp" min="0" max="100" step="1" value="35"><output id="lampV">35%</output></div>
+        <p class="note" style="margin:-2px 0 10px">Sent to the ESP32 as an MQTT command. The servo cannot be commanded. It always points to the brightness the LDR measures, from 0° (dim) to 180° (full light).</p>
+        <hr style="border:0;border-top:1px solid var(--line);margin:12px 0">
+        <div class="field"><label for="load">Load on horn</label><input type="range" id="load" min="0" max="100" step="1" value="0"><output id="loadV">0%</output></div>
+        <label class="switch"><input type="checkbox" id="wifi" checked> Wi-Fi link up</label>
+        <p class="note" style="margin-top:8px">Load and Wi-Fi are fault tests, not commands. Raise the load to see the integral term push the servo back to where the LDR says it should be, then move the lamp a long way to see the current spike. Turn Wi-Fi off to see the last-will message and the gap in the data.</p>
+      </div>
+    </div>
+  </div>
+  <div class="row c23">
+    <div class="card">
+      <div class="hd"><h2>Feedback received over MQTT</h2><span class="pill ok" id="fbLink">live</span></div>
+      <div class="kv" style="margin-bottom:12px">
+        <div><span>Reported angle</span><b id="fbAngle">--<small>°</small></b></div>
+        <div><span>Shaft (physical)</span><b id="fbPhys">--<small>°</small></b></div>
+        <div><span>Setpoint</span><b id="fbSet">--<small>°</small></b></div>
+        <div><span>Current</span><b id="fbCur">--<small>mA</small></b></div>
+        <div><span>Temp</span><b id="fbTemp">--<small>°C</small></b></div>
+        <div><span>Light</span><b id="fbLux">--<small>lux</small></b></div>
+        <div><span>Lamp</span><b id="fbLamp">--<small>%</small></b></div>
+        <div><span>Last message</span><b id="fbAge">--<small>s ago</small></b></div>
+      </div>
+      <div class="legend"><span style="--c:var(--s1)"><i></i>reported angle</span><span style="--c:var(--s2)"><i class="dash"></i>setpoint</span></div>
+      <div class="chartbox"><canvas class="chart" id="fbChart" style="height:170px"></canvas><div class="tip"></div></div>
+    </div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h2>Alerts from Node-RED</h2></div><div id="alertList" class="log" style="max-height:120px"></div></div>
+      <div class="card"><div class="hd"><h2>Broker traffic</h2><button class="btn sm" id="goMqtt">Open MQTT tab</button></div><div id="trafficLog" class="log"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ESP32 -->
+<section id="v-esp" class="view">
+  <p class="lead">The firmware that runs on the simulated ESP32. The JavaScript file executes here with Arduino-style <code>setup()</code> and <code>loop()</code>. The C++ sketch is the same logic written for a real board. Press Flash &amp; run (or Ctrl+Enter) after editing.</p>
+  <div class="row c32">
+    <div id="ide-esp" style="min-width:0"></div>
+    <div class="stack">
+      <div class="card"><div class="hd"><h2 style="--hue:var(--h-esp)"><i></i>Serial monitor</h2><button class="btn sm" id="serialClear">Clear</button></div><div class="log" id="serial" style="max-height:290px;min-height:200px"></div></div>
+      <div class="card"><div class="hd"><h2>Pin map</h2></div>
+        <div class="scroll-x"><table class="tbl"><thead><tr><th>Pin</th><th>Function</th><th>Connected to</th></tr></thead><tbody>
+          <tr><td>GPIO18</td><td>PWM 50 Hz</td><td>Servo signal (orange)</td></tr>
+          <tr><td>GPIO34</td><td>ADC1 12-bit</td><td>Servo feedback pot wiper</td></tr>
+          <tr><td>GPIO21 / 22</td><td>I²C SDA / SCL</td><td>INA219 current sensor</td></tr>
+          <tr><td>GPIO25</td><td>LEDC PWM 5 kHz</td><td>Lamp driver (MOSFET gate)</td></tr>
+          <tr><td>GPIO32</td><td>ADC1 12-bit</td><td>LDR divider (LDR to 3V3, 10 kΩ to GND)</td></tr>
+          <tr><td>GPIO2</td><td>Digital out</td><td>On-board LED (publish blink)</td></tr>
+          <tr><td>5 V ext.</td><td>Servo supply</td><td>2 A supply, common GND</td></tr>
+        </tbody></table></div>
+      </div>
+    </div>
+  </div>
+  <details><summary>Simulated runtime API</summary>
+    <div class="scroll-x"><table class="tbl apitbl"><tbody>
+      <tr><td>millis()</td><td>Milliseconds since boot</td></tr>
+      <tr><td>servo.attach(pin) · servo.writeMicroseconds(us)</td><td>Pulse width 500–2400 µs maps to 0–180°</td></tr>
+      <tr><td>analogRead(34) · analogRead(32)</td><td>12-bit readings, 0–4095: servo feedback on 34, LDR divider on 32</td></tr>
+      <tr><td>lamp.write(percent)</td><td>PWM duty of the lamp driver, 0–100</td></tr>
+      <tr><td>sensors.current_mA() · sensors.temp_C()</td><td>INA219 current and NTC temperature</td></tr>
+      <tr><td>wifi.connected() · wifi.rssi()</td><td>Link state and signal strength</td></tr>
+      <tr><td>mqtt.connect(id, willTopic, willPayload)</td><td>Returns true when the broker accepts the session</td></tr>
+      <tr><td>mqtt.connected() · mqtt.subscribe(filter) · mqtt.publish(topic, payload, retain)</td><td>PubSubClient-style calls</td></tr>
+      <tr><td>onMessage(topic, payload)</td><td>Define this function to receive subscribed messages</td></tr>
+      <tr><td>Serial.println(...) · constrain() · map() · digitalWrite(2, v)</td><td>Same as Arduino</td></tr>
+    </tbody></table></div>
+    <p class="note" style="margin-top:8px">Avoid blocking loops. A real ESP32 resets on a watchdog timeout, and here a <code>while(true)</code> would freeze this page.</p>
+  </details>
+</section>
+
+<!-- MQTT -->
+<section id="v-mqtt" class="view">
+  <p class="lead">The Mosquitto broker. Messages travel with a configurable network latency, retained messages are replayed to new subscribers, and a last-will message is published when a client disappears without saying goodbye.</p>
+  <div class="row c2">
+    <div class="stack">
+      <div class="card"><div class="hd"><h2 style="--hue:var(--h-mqtt)"><i></i>Broker</h2></div><div class="kv" id="mqStats"></div>
+        <div class="tbl-wrap" style="margin-top:14px;max-height:170px"><table class="tbl"><thead><tr><th>Client</th><th>Subscriptions</th><th>Link</th></tr></thead><tbody id="clientTbl"></tbody></table></div></div>
+      <div class="card"><div class="hd"><h2>Topics</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Topic</th><th>Msgs</th><th>Last payload</th></tr></thead><tbody id="topicTbl"></tbody></table></div></div>
+    </div>
+    <div id="ide-mqtt" style="min-width:0"></div>
+  </div>
+  <div class="row c2">
+    <div class="card">
+      <div class="hd"><h2>Publish</h2></div>
+      <div class="field" style="grid-template-columns:70px minmax(0,1fr)"><label for="pubTopic">Topic</label><input type="text" id="pubTopic" value="servo/esp32-01/cmd"></div>
+      <div class="field" style="grid-template-columns:70px minmax(0,1fr)"><label for="pubPayload">Payload</label><input type="text" id="pubPayload" value='{"lamp":60}'></div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><label class="switch"><input type="checkbox" id="pubRetain"> Retain</label><button class="btn primary" id="pubBtn">Publish</button></div>
+      <p class="note" style="margin-top:8px">Try <code>{"lamp":0}</code> or <code>{"lamp":100}</code>. The firmware ignores any other command, so the servo cannot be steered directly.</p>
+    </div>
+    <div class="card">
+      <div class="hd"><h2>Message log</h2><input type="text" id="logFilter" value="#" style="width:160px" aria-label="Topic filter" placeholder="topic filter, e.g. servo/+/alert"></div>
+      <div class="log" id="msgLog" style="max-height:260px"></div>
+    </div>
+  </div>
+</section>
+
+<!-- NODE-RED -->
+<section id="v-nr" class="view">
+  <p class="lead">The backend flow. It listens to the broker, parses telemetry, shapes it into InfluxDB points, evaluates alert rules and writes status changes. Click a function node to edit its code, then Deploy.</p>
+  <div class="card" style="margin-bottom:16px">
+    <div class="hd"><h2 style="--hue:var(--h-nr)"><i></i>Flow: Servo Lab</h2><span class="note" id="nrInfo">Select a node.</span></div>
+    <div class="nrbox" id="nrCanvas"></div>
+  </div>
+  <div class="row c32">
+    <div id="ide-nr" style="min-width:0"></div>
+    <div class="card"><div class="hd"><h2>Debug</h2><button class="btn sm" id="nrDebugClear">Clear</button></div><div class="log" id="nrDebug" style="max-height:440px"></div></div>
+  </div>
+</section>
+
+<!-- INFLUX -->
+<section id="v-influx" class="view">
+  <p class="lead">The time-series database. Query it with SQL: aggregates, <code>date_bin()</code> time buckets, CASE, HAVING and percentiles work. Select part of a query and run just that, or press Ctrl+Enter. Times in results are UTC, as in a real InfluxDB.</p>
+  <div class="row c13">
+    <div class="stack">
+      <div class="card"><div class="hd"><h2 style="--hue:var(--h-influx)"><i></i>Schema · servo_lab</h2></div><div id="schema"></div></div>
+      <div class="card"><div class="hd"><h2>Latest writes</h2></div><div class="log" id="writeLog" style="max-height:200px"></div></div>
+    </div>
+    <div class="stack">
+      <div id="ide-sql" style="min-width:0"></div>
+      <div class="card">
+        <div class="hd"><h2>Result</h2><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><label class="switch"><input type="checkbox" id="sqlLive"> Live</label><span class="note num" id="sqlMeta"></span><div class="seg" id="sqlView"><button data-v="chart" class="on">Chart</button><button data-v="table">Table</button></div></div></div>
+        <div id="sqlErr" class="perr" hidden></div>
+        <div id="sqlChartBox"><div class="legend" id="sqlLegend"></div><div class="chartbox"><canvas class="chart" id="sqlChart" style="height:240px"></canvas><div class="tip"></div></div></div>
+        <div id="sqlTableBox" class="tbl-wrap" hidden></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DASHBOARD -->
+<section id="v-dash" class="view">
+  <div class="hd" style="margin-bottom:12px"><p class="lead" style="margin:0">Every number and chart here is a SQL query against InfluxDB, refreshed once a second. Edit a panel to change its query.</p>
+    <div class="seg" id="rangeSeg" role="group" aria-label="Time range"><button data-r="1 minute">1 m</button><button data-r="2 minutes" class="on">2 m</button><button data-r="5 minutes">5 m</button></div></div>
+  <div class="tiles" id="tiles"></div>
+  <div class="dgrid" id="dashGrid"></div>
+  <div class="card" id="dashEditor" style="margin-top:16px" hidden>
+    <div class="hd"><h2 id="dashEditTitle">Edit panel</h2><span class="note">Use <code>$range</code> for the selected time range, for example <code>interval '$range'</code>.</span></div>
+    <div id="ide-dash"></div>
+  </div>
+</section>
+
+<!-- REAL STACK -->
+<section id="v-stack" class="view">
+  <p class="lead">Run the same architecture on real hardware. Flash the C++ sketch from the ESP32 tab, then start the services below. The flow file is generated from the code currently in the Node-RED editor. Check node settings against the versions you install, because InfluxDB 3 and the Node-RED InfluxDB nodes change between releases.</p>
+  <div id="ide-stack"></div>
+</section>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script type="text/plain" data-file="esp-js" data-name="firmware.sim.js" data-lang="js">
+// firmware.sim.js - runs on the simulated ESP32 (Arduino-style setup/loop)
+// The servo cannot be commanded. It always points to the brightness the LDR measures.
+// The only command this firmware accepts is {"lamp": 0..100}.
+const DEVICE = "esp32-01";
+const T_CMD    = "servo/" + DEVICE + "/cmd";
+const T_STATE  = "servo/" + DEVICE + "/state";
+const T_STATUS = "servo/" + DEVICE + "/status";
+
+const PIN_SERVO = 18;
+const PIN_FB = 34;            // feedback potentiometer on the servo shaft
+const PIN_LAMP = 25;          // LEDC PWM to the lamp MOSFET gate
+const PIN_LDR = 32;           // LDR divider: LDR to 3V3, 10k to GND (ADC1)
+const ADC_AT_0DEG = 120;      // calibration of the feedback pot
+const ADC_AT_180DEG = 3975;
+const LUX_MAX = 800;          // illuminance that counts as 100 % brightness
+
+const CONTROL_MS = 20;        // 50 Hz control loop
+const PUBLISH_MS = 200;       // 5 Hz telemetry
+
+// Servo loop tuning. Fixed on purpose, nothing can change it over MQTT.
+const KP = 0.35, KI = 1.2, KD = 0.0;
+const MAX_SPEED = 240;        // setpoint slew limit in degrees per second
+
+let target = 90, setpoint = 90, angle = 90;
+let integral = 0, lastErr = 0, lastPwm = 1500;
+let lampPct = 35, luxF = 5, ldrRaw = 0;   // lamp duty in %, filtered illuminance, raw LDR reading
+let lastControl = 0, lastPublish = 0, lastMqttTry = 0, lastLog = 0, ledOffAt = 0;
+
+function angleToUs(a) {
+  return Math.round(map(constrain(a, 0, 180), 0, 180, 500, 2400));
+}
+
+function readAngle() {        // average 8 ADC samples to cut noise
+  let sum = 0;
+  for (let i = 0; i < 8; i++) sum += analogRead(PIN_FB);
+  return map(sum / 8, ADC_AT_0DEG, ADC_AT_180DEG, 0, 180);
+}
+
+function readLux() {          // LDR divider -> resistance -> illuminance
+  let sum = 0;
+  for (let i = 0; i < 8; i++) sum += analogRead(PIN_LDR);
+  ldrRaw = Math.round(sum / 8);
+  const adc = constrain(ldrRaw, 1, 4094);
+  const r = 10000 * (4095 / adc - 1);            // LDR resistance in ohms
+  return 10 * Math.pow(20000 / r, 1 / 0.7);      // fit: 20 kohm at 10 lux, gamma 0.7
+}
+
+function control(dt) {
+  luxF += 0.15 * (readLux() - luxF);                // smooth the LDR reading
+  target = map(constrain(luxF, 0, LUX_MAX), 0, LUX_MAX, 0, 180);   // servo degrees show brightness
+  const step = MAX_SPEED * dt;                      // slew-rate limit
+  setpoint += constrain(target - setpoint, -step, step);
+  angle = readAngle();                              // feedback
+  const err = setpoint - angle;
+  integral = constrain(integral + err * dt, -25, 25);
+  const deriv = (err - lastErr) / dt;
+  lastErr = err;
+  const cmd = setpoint + KP * err + KI * integral + KD * deriv;
+  lastPwm = angleToUs(cmd);
+  servo.writeMicroseconds(lastPwm);
+}
+
+function publishState(now) {
+  const msg = {
+    ts: now,
+    mode: "light",
+    angle: +angle.toFixed(2),
+    setpoint: +setpoint.toFixed(2),
+    target: +target.toFixed(1),
+    pwm: lastPwm,
+    current: Math.round(sensors.current_mA()),
+    temp: +sensors.temp_C().toFixed(1),
+    rssi: wifi.rssi(),
+    ldr: ldrRaw,
+    lux: Math.round(luxF),
+    lamp: lampPct
+  };
+  mqtt.publish(T_STATE, JSON.stringify(msg));
+  digitalWrite(LED_BUILTIN, HIGH);
+  ledOffAt = now + 40;
+}
+
+function connectMqtt(now) {
+  if (!wifi.connected() || now - lastMqttTry < 2000) return;
+  lastMqttTry = now;
+  Serial.println("MQTT: connecting...");
+  // the last-will message tells everyone we vanished
+  if (mqtt.connect(DEVICE, T_STATUS, "offline")) {
+    mqtt.subscribe(T_CMD);
+    mqtt.publish(T_STATUS, "online", true);       // retained
+    Serial.println("MQTT: connected, listening on " + T_CMD);
+  } else {
+    Serial.println("MQTT: connect failed, retrying in 2 s");
+  }
+}
+
+function onMessage(topic, payload) {
+  let m;
+  try { m = JSON.parse(payload); }
+  catch (e) { Serial.println("bad JSON on " + topic); return; }
+  if (typeof m.lamp === "number") {
+    lampPct = constrain(m.lamp, 0, 100);
+    lamp.write(lampPct);
+    Serial.println("lamp " + Math.round(lampPct) + " %");
+  } else {
+    Serial.println('cmd ignored, only {"lamp": 0..100} is accepted');
+  }
+}
+
+function setup() {
+  Serial.begin(115200);
+  servo.attach(PIN_SERVO);
+  servo.writeMicroseconds(angleToUs(90));
+  lamp.write(lampPct);
+  Serial.println("Light-following servo " + DEVICE + " booted");
+}
+
+function loop() {
+  const now = millis();
+  if (ledOffAt && now >= ledOffAt) { digitalWrite(LED_BUILTIN, LOW); ledOffAt = 0; }
+
+  if (now - lastControl >= CONTROL_MS) {
+    const dt = Math.min((now - lastControl) / 1000, 0.1);
+    lastControl = now;
+    control(dt);
+  }
+
+  if (now - lastLog >= 2000) {
+    lastLog = now;
+    Serial.println("lamp=" + Math.round(lampPct) + "% lux=" + Math.round(luxF) + " angle=" + angle.toFixed(1) +
+                   " set=" + setpoint.toFixed(1) + " " + Math.round(sensors.current_mA()) + "mA");
+  }
+
+  if (!mqtt.connected()) { connectMqtt(now); return; }
+  if (now - lastPublish >= PUBLISH_MS) { lastPublish = now; publishState(now); }
+}
+</script>
+
+<script type="text/plain" data-file="esp-ino" data-name="servo_mqtt.ino" data-lang="cpp">
+// servo_mqtt.ino - the same light-following servo for a real ESP32 DevKit
+// The servo cannot be commanded. It always points to the brightness the LDR measures.
+// The only MQTT command accepted is {"lamp": 0..100}.
+// Libraries: PubSubClient, ArduinoJson (v7), ESP32Servo, Adafruit INA219
+// Board package: Arduino-ESP32 3.x (ledcAttach / ledcWrite)
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
+#include <ESP32Servo.h>
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+
+const char* WIFI_SSID = "your-wifi";
+const char* WIFI_PASS = "your-password";
+const char* MQTT_HOST = "192.168.1.50";   // machine running docker compose
+const uint16_t MQTT_PORT = 1883;
+const char* DEVICE = "esp32-01";
+
+const int PIN_SERVO = 18;
+const int PIN_FB = 34;                    // feedback pot wiper
+const int PIN_NTC = 35;                   // 10k NTC divider
+const int PIN_LAMP = 25;                  // LEDC PWM to the lamp MOSFET gate
+const int PIN_LDR = 32;                   // LDR to 3V3, 10k to GND
+const int ADC_AT_0DEG = 120, ADC_AT_180DEG = 3975;
+const float LUX_MAX = 800.0f;             // illuminance that counts as 100 % brightness
+const uint32_t CONTROL_MS = 20, PUBLISH_MS = 200;
+
+// Servo loop tuning. Fixed on purpose, nothing can change it over MQTT.
+const float KP = 0.35f, KI = 1.2f, KD = 0.0f, MAX_SPEED = 240.0f;
+
+WiFiClient net;
+PubSubClient mqtt(net);
+Servo servo;
+Adafruit_INA219 ina;
+
+char tCmd[48], tState[48], tStatus[48];
+float target = 90, setpoint = 90, angle = 90, integral = 0, lastErr = 0;
+float luxF = 5;
+int ldrRaw = 0, lampPct = 35;
+int lastPwm = 1500;
+uint32_t lastControl = 0, lastPublish = 0, lastTry = 0;
+
+float mapf(float x, float a, float b, float c, float d) {
+  return (x - a) * (d - c) / (b - a) + c;
+}
+int angleToUs(float a) { return (int)mapf(constrain(a, 0, 180), 0, 180, 500, 2400); }
+
+float readAngle() {
+  long sum = 0;
+  for (int i = 0; i < 8; i++) sum += analogRead(PIN_FB);
+  return mapf(sum / 8.0f, ADC_AT_0DEG, ADC_AT_180DEG, 0, 180);
+}
+
+float readLux() {                         // LDR divider -> resistance -> illuminance
+  long sum = 0;
+  for (int i = 0; i < 8; i++) sum += analogRead(PIN_LDR);
+  ldrRaw = sum / 8;
+  float adc = constrain((float)ldrRaw, 1.0f, 4094.0f);
+  float r = 10000.0f * (4095.0f / adc - 1.0f);
+  return 10.0f * powf(20000.0f / r, 1.0f / 0.7f);
+}
+
+float readTempC() {                       // beta equation, B = 3950
+  float v = analogRead(PIN_NTC);
+  float r = 10000.0f * v / (4095.0f - v);
+  return 1.0f / (logf(r / 10000.0f) / 3950.0f + 1.0f / 298.15f) - 273.15f;
+}
+
+void control(float dt) {
+  luxF += 0.15f * (readLux() - luxF);
+  target = mapf(constrain(luxF, 0.0f, LUX_MAX), 0, LUX_MAX, 0, 180);   // servo degrees show brightness
+  float step = MAX_SPEED * dt;
+  setpoint += constrain(target - setpoint, -step, step);
+  angle = readAngle();
+  float err = setpoint - angle;
+  integral = constrain(integral + err * dt, -25.0f, 25.0f);
+  float deriv = (err - lastErr) / dt;
+  lastErr = err;
+  float cmd = setpoint + KP * err + KI * integral + KD * deriv;
+  lastPwm = angleToUs(cmd);
+  servo.writeMicroseconds(lastPwm);
+}
+
+void onMessage(char* topic, byte* payload, unsigned int len) {
+  JsonDocument doc;
+  if (deserializeJson(doc, payload, len)) return;
+  if (doc["lamp"].is<float>()) {
+    lampPct = constrain((int)doc["lamp"], 0, 100);
+    ledcWrite(PIN_LAMP, lampPct * 255 / 100);
+  }                                       // anything else is ignored
+}
+
+void publishState() {
+  JsonDocument doc;
+  doc["ts"] = millis();
+  doc["mode"] = "light";
+  doc["angle"] = roundf(angle * 100) / 100;
+  doc["setpoint"] = roundf(setpoint * 100) / 100;
+  doc["target"] = roundf(target * 10) / 10;
+  doc["pwm"] = lastPwm;
+  doc["current"] = (int)ina.getCurrent_mA();
+  doc["temp"] = roundf(readTempC() * 10) / 10;
+  doc["rssi"] = WiFi.RSSI();
+  doc["ldr"] = ldrRaw;
+  doc["lux"] = (int)luxF;
+  doc["lamp"] = lampPct;
+  char buf[256];
+  size_t n = serializeJson(doc, buf);
+  mqtt.publish(tState, (const uint8_t*)buf, n, false);
+  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+}
+
+bool connectMqtt() {
+  // client id, user, pass, will topic, will QoS, will retain, will message
+  if (!mqtt.connect(DEVICE, nullptr, nullptr, tStatus, 0, true, "offline")) return false;
+  mqtt.subscribe(tCmd);
+  mqtt.publish(tStatus, "online", true);
+  return true;
+}
+
+void setup() {
+  Serial.begin(115200);
+  snprintf(tCmd, sizeof(tCmd), "servo/%s/cmd", DEVICE);
+  snprintf(tState, sizeof(tState), "servo/%s/state", DEVICE);
+  snprintf(tStatus, sizeof(tStatus), "servo/%s/status", DEVICE);
+  pinMode(LED_BUILTIN, OUTPUT);
+  Wire.begin(21, 22);
+  ina.begin();
+  servo.setPeriodHertz(50);
+  servo.attach(PIN_SERVO, 500, 2400);
+  servo.writeMicroseconds(angleToUs(90));
+  ledcAttach(PIN_LAMP, 5000, 8);            // 5 kHz, 8 bit
+  ledcWrite(PIN_LAMP, lampPct * 255 / 100);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  mqtt.setServer(MQTT_HOST, MQTT_PORT);
+  mqtt.setBufferSize(512);
+  mqtt.setCallback(onMessage);
+}
+
+void loop() {
+  uint32_t now = millis();
+  if (WiFi.status() != WL_CONNECTED) { WiFi.reconnect(); }
+
+  if (now - lastControl >= CONTROL_MS) {
+    float dt = min((now - lastControl) / 1000.0f, 0.1f);
+    lastControl = now;
+    control(dt);
+  }
+
+  if (!mqtt.connected()) {
+    if (WiFi.status() == WL_CONNECTED && now - lastTry > 2000) {
+      lastTry = now;
+      connectMqtt();
+    }
+    return;
+  }
+  mqtt.loop();
+  if (now - lastPublish >= PUBLISH_MS) { lastPublish = now; publishState(); }
+}
+</script>
+
+<script type="text/plain" data-file="mqtt-conf" data-name="mosquitto.conf" data-lang="conf">
+# mosquitto.conf - edit, then press Apply config
+listener 1883
+allow_anonymous true
+persistence false
+
+# Retained messages: the last status is replayed to new subscribers
+retain_available true
+
+# sim_* lines only configure this simulator.
+# Remove them before using the file on a real broker.
+sim_latency_ms 30
+sim_jitter_ms 20
+sim_keepalive_s 3
+</script>
+<script type="text/plain" data-file="nr-enrich" data-name="enrich.js" data-lang="js">
+// Function node "enrich" - runs for every servo/+/state message.
+// Input : msg.topic = "servo/esp32-01/state", msg.payload = parsed telemetry object
+// Output: msg.payload shaped as an InfluxDB point for the "influxdb out" node
+const p = msg.payload;
+const device = msg.topic.split("/")[1];
+
+// Drop impossible readings instead of polluting the database
+if (typeof p.angle !== "number" || p.angle < 0 || p.angle > 180) {
+  node.warn("dropped out-of-range angle from " + device);
+  return null;
+}
+
+flow.set("last_" + device, { t: Date.now(), angle: p.angle });
+
+msg.device = device;
+msg.telemetry = p;              // keep the raw reading for the alert node
+msg.payload = [{
+  measurement: "servo",
+  tags: { device: device, mode: p.mode },
+  fields: {
+    angle: p.angle,
+    setpoint: p.setpoint,
+    target: p.target,
+    error: Math.round((p.setpoint - p.angle) * 100) / 100,
+    pwm_us: p.pwm,
+    current_ma: p.current,
+    temp_c: p.temp,
+    rssi: p.rssi,
+    ldr: p.ldr,
+    lux: p.lux,
+    lamp: p.lamp
+  },
+  timestamp: Date.now()
+}];
+return msg;
+</script>
+
+<script type="text/plain" data-file="nr-alert" data-name="alert-rules.js" data-lang="js">
+// Function node "alert rules" - two outputs
+//   output 1 -> MQTT out  (servo/<device>/alert)
+//   output 2 -> InfluxDB  (alerts table)
+const p = msg.telemetry;
+const device = msg.device;
+const now = Date.now();
+const state = flow.get("alerts") || {};
+
+const err = Math.abs(p.setpoint - p.angle);
+const RULES = [
+  { kind: "tracking_error", active: err > 5, holdMs: 1000,
+    value: +err.toFixed(1), text: "Position error above 5 degrees" },
+  { kind: "overcurrent", active: p.current > 350, holdMs: 0,
+    value: p.current, text: "Servo current above 350 mA" },
+  { kind: "overtemp", active: p.temp > 55, holdMs: 0,
+    value: p.temp, text: "Servo temperature above 55 C" }
+];
+
+const toMqtt = [];
+const toDb = [];
+for (const r of RULES) {
+  const s = state[device + ":" + r.kind] || (state[device + ":" + r.kind] = { since: 0, firedAt: 0 });
+  if (!r.active) { s.since = 0; continue; }
+  if (!s.since) s.since = now;
+  const held = now - s.since >= r.holdMs;
+  const cooledDown = now - s.firedAt > 8000;      // at most one alert per 8 s
+  if (held && cooledDown) {
+    s.firedAt = now;
+    toMqtt.push({
+      topic: "servo/" + device + "/alert",
+      payload: JSON.stringify({ kind: r.kind, value: r.value, text: r.text, ts: now })
+    });
+    toDb.push({ payload: [{
+      measurement: "alerts",
+      tags: { device: device, kind: r.kind },
+      fields: { value: r.value },
+      timestamp: now
+    }] });
+  }
+}
+flow.set("alerts", state);
+return [toMqtt.length ? toMqtt : null, toDb.length ? toDb : null];
+</script>
+
+<script type="text/plain" data-file="nr-status" data-name="status.js" data-lang="js">
+// Function node "status" - servo/+/status carries "online" or "offline" (retained).
+// The broker publishes "offline" for us when the ESP32 vanishes (last will).
+const device = msg.topic.split("/")[1];
+const online = String(msg.payload).trim() === "online";
+
+msg.payload = [{
+  measurement: "device_status",
+  tags: { device: device },
+  fields: { online: online ? 1 : 0 },
+  timestamp: Date.now()
+}];
+return msg;
+</script>
+
+<script type="text/plain" data-file="sql-levels" data-name="lamp-levels.sql" data-lang="sql">
+-- How closely does the servo follow the LDR at each lamp level?
+SELECT lamp,
+       round(avg(lux))           AS avg_lux,
+       round(avg(angle), 1)      AS avg_angle,
+       round(avg(abs(error)), 2) AS mean_abs_error,
+       round(max(current_ma))    AS peak_ma,
+       count(*)                  AS samples
+FROM servo
+WHERE time > now() - interval '3 minutes'
+GROUP BY lamp
+ORDER BY lamp;
+</script>
+
+<script type="text/plain" data-file="sql-series" data-name="angle.sql" data-lang="sql">
+-- 2-second buckets: measured angle against the setpoint
+SELECT date_bin(interval '2 seconds', time) AS t,
+       avg(angle)    AS angle,
+       avg(setpoint) AS setpoint
+FROM servo
+WHERE time > now() - interval '3 minutes'
+GROUP BY 1
+ORDER BY 1;
+</script>
+
+<script type="text/plain" data-file="sql-track" data-name="tracking.sql" data-lang="sql">
+-- Tracking quality in 10-second windows
+SELECT date_bin(interval '10 seconds', time) AS window,
+       round(sqrt(avg(error * error)), 2)                 AS rms_error,
+       round(approx_percentile_cont(abs(error), 0.95), 2) AS p95_error,
+       round(max(current_ma))                             AS peak_ma
+FROM servo
+WHERE time > now() - interval '3 minutes'
+GROUP BY 1
+HAVING count(*) > 5
+ORDER BY 1;
+</script>
+
+<script type="text/plain" data-file="sql-link" data-name="link.sql" data-lang="sql">
+-- Messages stored per 5 s. A healthy link delivers about 25.
+-- Wi-Fi drops show up as buckets with a low count.
+SELECT date_bin(interval '5 seconds', time) AS bucket,
+       count(*) AS msgs,
+       CASE WHEN count(*) < 18 THEN 'gap' ELSE 'ok' END AS link
+FROM servo
+WHERE time > now() - interval '3 minutes'
+GROUP BY 1
+ORDER BY 1;
+</script>
+
+<script type="text/plain" data-file="sql-alerts" data-name="alerts.sql" data-lang="sql">
+-- Alerts written by the Node-RED flow
+SELECT time, device, kind, value
+FROM alerts
+ORDER BY time DESC
+LIMIT 20;
+</script>
+
+<script type="text/plain" data-file="sql-scratch" data-name="scratch.sql" data-lang="sql">
+-- Scratch pad. Select a statement and press Ctrl+Enter to run only that part.
+SELECT * FROM servo ORDER BY time DESC LIMIT 15;
+
+SELECT time, online FROM device_status ORDER BY time DESC LIMIT 10;
+
+SELECT device, count(*) AS rows, min(time) AS first, max(time) AS last FROM servo GROUP BY device;
+</script>
+
+<script type="text/plain" data-file="stack-compose" data-name="docker-compose.yml" data-lang="yaml">
+# docker-compose.yml - the same services as this page
+# Save mosquitto.conf (from the MQTT tab, without the sim_ lines) next to this file.
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  nodered:
+    image: nodered/node-red:latest
+    ports: ["1880:1880"]
+    volumes: ["nodered_data:/data"]
+    depends_on: [mosquitto, influxdb]
+
+  influxdb:
+    image: influxdb:3-core
+    ports: ["8181:8181"]
+    # Flags follow the InfluxDB 3 Core docs; confirm them for the version you pull.
+    command:
+      - influxdb3
+      - serve
+      - --node-id=node0
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3
+    volumes: ["influx_data:/var/lib/influxdb3"]
+
+volumes:
+  nodered_data:
+  influx_data:
+</script>
+
+<script type="text/plain" data-file="stack-setup" data-name="setup.sh" data-lang="conf">
+# setup.sh - run these once, in order
+
+# 1. Start the services
+docker compose up -d
+
+# 2. Create an admin token and the database (InfluxDB 3 Core)
+docker compose exec influxdb influxdb3 create token --admin
+docker compose exec influxdb influxdb3 create database servo_lab --token "<token>"
+
+# 3. Node-RED at http://localhost:1880
+#    Palette: install node-red-contrib-influxdb
+#    Menu > Import: paste flows.json from the next tab
+#    InfluxDB config node: http://influxdb:8181, version 2.0, bucket servo_lab, token above
+
+# 4. Flash servo_mqtt.ino with MQTT_HOST set to this machine's IP address
+
+# 5. Query the data with the same SQL as the InfluxDB tab
+docker compose exec influxdb influxdb3 query --database servo_lab --token "<token>" \
+  "SELECT date_bin(interval '5 seconds', time) AS t, avg(angle) FROM servo GROUP BY 1 ORDER BY 1 DESC LIMIT 10"
+</script>
+<script>
+"use strict";
+/* ============ Core: clock, files, MQTT broker, servo physics, ESP32 runtime ============ */
+const SIM = { now: Date.now() - 180000, dt: 20, wifi: true, wifiUpAt: 0 };
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const bus = { h: {}, on(e, f) { (this.h[e] || (this.h[e] = [])).push(f); }, emit(e, d) { (this.h[e] || []).forEach(f => f(d)); } };
+let _seed = 20261009;
+const rnd = () => { _seed = (_seed * 1664525 + 1013904223) >>> 0; return _seed / 4294967296; };
+const gauss = () => (rnd() + rnd() + rnd() + rnd() - 2) * 1.7;
+const pad2 = n => String(n).padStart(2, "0");
+const iso = ms => new Date(ms).toISOString().replace("Z", "");
+const hms = ms => { const d = new Date(ms); return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()); };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* Date that follows the simulated clock inside Node-RED function nodes */
+class SimDate extends Date {
+  constructor(...a) { if (a.length) super(...a); else super(SIM.now); }
+  static now() { return SIM.now; }
+}
+
+/* ---- editable files (defaults come from <script type="text/plain"> blocks) ---- */
+const FILES = {
+  defs: {},
+  rev: { "esp-js": "v3", "esp-ino": "v3", "nr-enrich": "v2" },   // defaults changed with the lamp and LDR; older saved edits of these would hide the feature
+  key(id) { return "servolab:" + (this.rev[id] || "v1") + ":" + id; },
+  init() {
+    document.querySelectorAll('script[type="text/plain"][data-file]').forEach(el => {
+      let t = el.textContent; if (t[0] === "\n") t = t.slice(1);
+      const id = el.dataset.file;
+      this.defs[id] = { id, name: el.dataset.name, lang: el.dataset.lang, def: t, val: t };
+      try { const s = localStorage.getItem(this.key(id)); if (s != null) this.defs[id].val = s; } catch (e) { /* storage blocked */ }
+    });
+  },
+  get(id) { return this.defs[id].val; },
+  set(id, v) { this.defs[id].val = v; try { localStorage.setItem(this.key(id), v); } catch (e) { /* ignore */ } },
+  reset(id) { this.defs[id].val = this.defs[id].def; try { localStorage.removeItem(this.key(id)); } catch (e) { /* ignore */ } }
+};
+
+/* ---- MQTT broker ---- */
+function topicMatch(filter, topic) {
+  const f = filter.split("/"), t = topic.split("/");
+  for (let i = 0; i < f.length; i++) {
+    if (f[i] === "#") return true;
+    if (i >= t.length) return false;
+    if (f[i] !== "+" && f[i] !== t[i]) return false;
+  }
+  return f.length === t.length;
+}
+
+class Broker {
+  constructor() {
+    this.clients = new Map(); this.retained = new Map(); this.queue = []; this.log = []; this.topics = new Map();
+    this.cfg = { latency: 30, jitter: 20, keepalive: 3, retain: true };
+    this.stats = { pub: 0, del: 0, bytes: 0 }; this.muted = false; this.win = [];
+  }
+  sys(text) { this._record({ t: SIM.now, from: "broker", topic: "(log)", payload: text, sys: true, n: 0 }); }
+  _record(e) {
+    if (!e.sys) {
+      const tp = this.topics.get(e.topic) || { n: 0 };
+      tp.n++; tp.last = e.payload; tp.t = e.t; tp.retain = e.retain; tp.from = e.from;
+      this.topics.set(e.topic, tp);
+    }
+    if (this.muted) return;
+    this.log.push(e);
+    if (this.log.length > 400) this.log.splice(0, 100);
+    bus.emit("log", e);
+  }
+  connect(id, { will = null, onMessage }) {
+    this.clients.set(id, { id, subs: new Set(), will, onMessage, link: true, deadline: 0 }); // replaces any stale session, so its will is dropped
+    this.sys("client " + id + " connected");
+    bus.emit("clients");
+    return true;
+  }
+  subscribe(id, filter) {
+    const c = this.clients.get(id); if (!c) return;
+    c.subs.add(filter);
+    if (this.cfg.retain) for (const [t, m] of this.retained) if (topicMatch(filter, t)) this._enqueue(c, t, m.payload, true);
+  }
+  publish(from, topic, payload, retain = false) {
+    payload = String(payload);
+    this.stats.pub++; this.stats.bytes += payload.length; this.win.push(SIM.now);
+    const keep = !!retain && this.cfg.retain;
+    if (keep) { if (payload === "") this.retained.delete(topic); else this.retained.set(topic, { payload, t: SIM.now }); }
+    let n = 0;
+    for (const c of this.clients.values()) {
+      for (const f of c.subs) if (topicMatch(f, topic)) { this._enqueue(c, topic, payload, false); n++; break; }
+    }
+    const e = { t: SIM.now, from, topic, payload, retain: keep, n };
+    this._record(e);
+    bus.emit("publish", e);
+  }
+  _enqueue(c, topic, payload, retained) {
+    this.queue.push({ at: SIM.now + this.cfg.latency + rnd() * this.cfg.jitter, id: c.id, topic, payload, retained });
+  }
+  linkLost(id) { const c = this.clients.get(id); if (c) { c.link = false; c.deadline = SIM.now + this.cfg.keepalive * 1000; } }
+  rate() {
+    const cut = SIM.now - 5000;
+    while (this.win.length && this.win[0] < cut) this.win.shift();
+    return this.win.length / 5;
+  }
+  tick() {
+    for (const c of [...this.clients.values()]) {
+      if (!c.link && c.deadline && SIM.now >= c.deadline) {
+        this.clients.delete(c.id);
+        this.sys("client " + c.id + " timed out, publishing last will");
+        if (c.will) this.publish(c.id, c.will.topic, c.will.payload, c.will.retain);
+        bus.emit("clients");
+      }
+    }
+    if (!this.queue.length) return;
+    const due = [], rest = [];
+    for (const m of this.queue) (m.at <= SIM.now ? due : rest).push(m);
+    this.queue = rest;
+    due.sort((a, b) => a.at - b.at);
+    for (const m of due) {
+      const c = this.clients.get(m.id);
+      if (!c || !c.link) continue;
+      this.stats.del++;
+      bus.emit("deliver", { to: m.id, topic: m.topic });
+      c.onMessage(m.topic, m.payload, m.retained);
+    }
+  }
+  applyConfig(text) {
+    const out = {}; const errs = [];
+    text.split("\n").forEach((line, i) => {
+      const l = line.trim(); if (!l || l[0] === "#") return;
+      const [k, v] = l.split(/\s+/);
+      if (k === "sim_latency_ms") out.latency = +v;
+      else if (k === "sim_jitter_ms") out.jitter = +v;
+      else if (k === "sim_keepalive_s") out.keepalive = +v;
+      else if (k === "retain_available") out.retain = (v === "true");
+      else if (!["listener", "allow_anonymous", "persistence"].includes(k)) errs.push("line " + (i + 1) + ": unknown option " + k);
+    });
+    for (const k of ["latency", "jitter", "keepalive"]) if (k in out && !(out[k] >= 0)) errs.push(k + " must be a number");
+    if (errs.length) return errs;
+    Object.assign(this.cfg, out);
+    this.sys("config applied: latency " + this.cfg.latency + " ms, jitter " + this.cfg.jitter + " ms, keepalive " + this.cfg.keepalive + " s, retain " + this.cfg.retain);
+    return [];
+  }
+}
+const BROKER = new Broker();
+
+/* ---- servo plant: hobby servo with a feedback pot, a load and a supply meter ---- */
+const SERVO = {
+  theta: 90, v: 0, pulse: 1500, attached: false, load: 0, current: 12, temp: 26,
+  step(dt) {
+    const off = this.load * 14;                                 // load is 0..1 and shifts the holding position by up to 14 degrees
+    const cmd = this.attached ? clamp((this.pulse - 500) / 1900 * 180, 0, 180) : this.theta + off;
+    let err = cmd - off - this.theta;
+    if (Math.abs(err) < 0.35) err = 0;                          // dead band
+    const vdes = clamp(14 * err, -420, 420);                    // internal P loop, speed limited
+    this.v += (vdes - this.v) * Math.min(1, dt / 0.04);
+    this.theta = clamp(this.theta + this.v * dt, 0, 180);
+    if ((this.theta <= 0 && this.v < 0) || (this.theta >= 180 && this.v > 0)) this.v = 0;
+    const draw = 12 + 0.55 * Math.abs(this.v) + 300 * this.load + 4 * Math.abs(err);
+    this.current += (draw - this.current) * Math.min(1, dt / 0.05);
+    this.temp += ((25 + 0.09 * this.current) - this.temp) * dt / 60;
+  },
+  adc() { return clamp(Math.round(120 + this.theta / 180 * (3975 - 120) + gauss() * 3.5), 0, 4095); }
+};
+
+/* ---- lamp and LDR: PWM-dimmed lamp (slow filament), LDR in a divider with 10 kohm to GND ---- */
+const LAMP = {
+  duty: 0, glow: 0, lux: 5, ambient: 5, maxLux: 800,
+  step(dt) {
+    this.glow += (this.duty - this.glow) * Math.min(1, dt / 0.18);                 // filament warms and cools
+    const target = this.ambient + (this.maxLux - this.ambient) * this.glow;
+    this.lux += (target - this.lux) * Math.min(1, dt / 0.06);                      // LDR response time
+  },
+  adcClean() { const R = 20000 * Math.pow(this.lux / 10, -0.7); return 4095 * 10000 / (R + 10000); },   // 20 kohm at 10 lux, gamma 0.7
+  adc() { return clamp(Math.round(this.adcClean() + gauss() * 4), 0, 4095); }
+};
+
+/* ---- ESP32: runs the editable firmware against the plant and the broker ---- */
+class ESP32 {
+  constructor() {
+    this.serial = []; this.fw = null; this.state = "off"; this.mq = { connected: false, id: "" };
+    this.inbox = []; this.bootAt = SIM.now; this.led = 0; this.err = null; this.wasUp = true; this.warned = false;
+  }
+  wifiOk() { return SIM.wifi && SIM.now >= SIM.wifiUpAt; }
+  print(s) {
+    this.serial.push({ t: SIM.now - this.bootAt, s: String(s) });
+    if (this.serial.length > 300) this.serial.splice(0, 80);
+    bus.emit("serial");
+  }
+  fail(msg) {
+    this.state = "crashed"; this.err = msg;
+    this.print("Guru Meditation Error: " + msg);
+    this.print("Halted. Press Flash & run to reboot.");
+    bus.emit("esp-state");
+  }
+  api() {
+    const self = this;
+    return {
+      millis: () => Math.floor(SIM.now - self.bootAt),
+      constrain: (x, a, b) => Math.min(b, Math.max(a, x)),
+      map: (x, a, b, c, d) => (x - a) * (d - c) / (b - a) + c,
+      delay: () => { if (!self.warned) { self.warned = true; self.print("delay() does nothing here; use millis() timers"); } },
+      pinMode: () => {},
+      digitalWrite: (pin, v) => { if (pin === 2) self.led = v ? 1 : 0; },
+      LED_BUILTIN: 2, HIGH: 1, LOW: 0, OUTPUT: 1,
+      Serial: { begin() {}, println: (...a) => self.print(a.join(" ")), print: (...a) => self.print(a.join(" ")) },
+      servo: { attach() { SERVO.attached = true; }, writeMicroseconds(us) { SERVO.pulse = clamp(+us || 1500, 500, 2400); } },
+      analogRead: pin => pin === 34 ? SERVO.adc() : pin === 32 ? LAMP.adc() : 0,
+      lamp: { write: pct => { LAMP.duty = clamp((+pct || 0) / 100, 0, 1); } },
+      sensors: { current_mA: () => Math.max(0, SERVO.current + gauss() * 2), temp_C: () => SERVO.temp + gauss() * 0.05 },
+      wifi: { connected: () => self.wifiOk(), rssi: () => Math.round(-58 + 5 * Math.sin(SIM.now / 9000) + gauss()) },
+      mqtt: {
+        connect(id, willTopic, willPayload) {
+          if (!self.wifiOk()) return false;
+          BROKER.connect(id, { will: { topic: willTopic, payload: willPayload, retain: true }, onMessage: (t, p) => self.inbox.push([t, p]) });
+          self.mq = { connected: true, id };
+          self.print("MQTT session opened as " + id);
+          return true;
+        },
+        connected: () => self.mq.connected && self.wifiOk(),
+        subscribe(f) { if (self.mq.connected) BROKER.subscribe(self.mq.id, f); },
+        publish(t, p, retain) { if (!self.mq.connected || !self.wifiOk()) return false; BROKER.publish(self.mq.id, t, p, !!retain); return true; },
+        disconnect() { if (self.mq.connected) { BROKER.clients.delete(self.mq.id); self.mq.connected = false; } }
+      },
+      JSON, Math
+    };
+  }
+  flash(src) {
+    if (this.mq.connected) BROKER.linkLost(this.mq.id);           // a reset drops the socket: the last will fires after the keepalive
+    this.mq = { connected: false, id: "" }; this.inbox = []; this.bootAt = SIM.now; this.err = null; this.warned = false;
+    this.print("--- rst:0x1 (POWERON) boot ---");
+    const api = this.api(); const names = Object.keys(api);
+    try {
+      const f = new Function(...names, '"use strict";\n' + src + '\n;return {setup: typeof setup === "function" ? setup : null, loop: typeof loop === "function" ? loop : null, onMessage: typeof onMessage === "function" ? onMessage : null};');
+      this.fw = f(...names.map(k => api[k]));
+    } catch (e) { this.fw = null; this.fail("compile error: " + e.message); return false; }
+    try { if (this.fw.setup) this.fw.setup(); } catch (e) { this.fail("setup() threw: " + e.message); return false; }
+    this.state = "running"; bus.emit("esp-state");
+    return true;
+  }
+  tick() {
+    const up = this.wifiOk();
+    if (up !== this.wasUp) { this.print(up ? "WiFi: connected, IP 192.168.1.42" : "WiFi: connection lost"); this.wasUp = up; bus.emit("wifi", up); }
+    if (this.mq.connected && !up) { this.mq.connected = false; BROKER.linkLost(this.mq.id); }
+    if (this.state !== "running" || !this.fw) return;
+    try {
+      const msgs = this.inbox.splice(0);
+      if (this.fw.onMessage) for (const [t, p] of msgs) this.fw.onMessage(t, p);
+      if (this.fw.loop) this.fw.loop();
+    } catch (e) { this.fail("loop() threw: " + e.message); }
+  }
+}
+const ESP = new ESP32();
+
+function setWifi(on) {
+  if (on === SIM.wifi) return;
+  SIM.wifi = on;
+  if (on) SIM.wifiUpAt = SIM.now + 1500;
+  bus.emit("wifi-switch", on);
+}
+
+function simStep() {
+  SIM.now += SIM.dt;
+  BROKER.tick();
+  ESP.tick();
+  SERVO.step(SIM.dt / 1000);
+  LAMP.step(SIM.dt / 1000);
+}
+/* ============ Node-RED: flow engine that runs the editable function nodes ============ */
+const NR_W = 150, NR_H = 34;
+const NR_DEFS = [
+  { id: "in_state", type: "mqtt in", name: "servo/+/state", topic: "servo/+/state", x: 20, y: 40, wires: [["json"]] },
+  { id: "json", type: "json", name: "json", x: 200, y: 40, wires: [["fn_enrich"]] },
+  { id: "fn_enrich", type: "function", name: "enrich", file: "nr-enrich", x: 380, y: 40, wires: [["out_servo", "dbg", "fn_alert"]] },
+  { id: "out_servo", type: "influxdb out", name: "servo", x: 620, y: 10, wires: [] },
+  { id: "dbg", type: "debug", name: "point", x: 620, y: 70, wires: [] },
+  { id: "fn_alert", type: "function", name: "alert rules", file: "nr-alert", x: 620, y: 140, wires: [["mqtt_alert"], ["out_alert"]] },
+  { id: "mqtt_alert", type: "mqtt out", name: "servo/+/alert", x: 800, y: 115, wires: [] },
+  { id: "out_alert", type: "influxdb out", name: "alerts", x: 800, y: 175, wires: [] },
+  { id: "in_status", type: "mqtt in", name: "servo/+/status", topic: "servo/+/status", x: 20, y: 250, wires: [["fn_status"]] },
+  { id: "fn_status", type: "function", name: "status", file: "nr-status", x: 380, y: 250, wires: [["out_status", "dbg2"]] },
+  { id: "out_status", type: "influxdb out", name: "device_status", x: 620, y: 230, wires: [] },
+  { id: "dbg2", type: "debug", name: "status", x: 620, y: 285, wires: [] }
+];
+const NR = { nodes: [], byId: {}, flow: new Map(), debug: [], sel: "fn_enrich", ready: false };
+
+function nrDebug(node, level, data) {
+  let text;
+  try { text = typeof data === "string" ? data : JSON.stringify(data); } catch (e) { text = String(data); }
+  if (text && text.length > 260) text = text.slice(0, 260) + "...";
+  NR.debug.push({ t: SIM.now, node: node.name, level, text });
+  if (NR.debug.length > 120) NR.debug.splice(0, 30);
+  bus.emit("nr-debug");
+}
+function nrErr(node, text) { node.err = text; node.errCount = (node.errCount || 0) + 1; nrDebug(node, "error", text); }
+const nrClone = m => JSON.parse(JSON.stringify(m));
+
+function nrSendPort(node, msg, port) {
+  const targets = (node.wires[port] || []);
+  targets.forEach((id, i) => nrRun(NR.byId[id], i === 0 ? msg : nrClone(msg)));
+}
+
+function nrRun(node, msg) {
+  if (!node) return;
+  node.count++; node.last = SIM.now;
+  switch (node.type) {
+    case "mqtt in": return nrSendPort(node, msg, 0);
+    case "json":
+      if (typeof msg.payload === "string") {
+        try { msg.payload = JSON.parse(msg.payload); } catch (e) { return nrErr(node, "JSON parse error: " + e.message); }
+      }
+      return nrSendPort(node, msg, 0);
+    case "function": {
+      if (!node.fn) return;
+      const api = {
+        warn: t => nrDebug(node, "warn", t), error: t => nrErr(node, String(t)), log: t => nrDebug(node, "log", t),
+        status: s => { node.statusText = typeof s === "object" ? (s.text || "") : String(s); }, send: m => nrSendPort(node, m, 0)
+      };
+      const flow = { get: k => NR.flow.get(k), set: (k, v) => { NR.flow.set(k, v); } };
+      let out;
+      try { out = node.fn(msg, api, flow, flow, { get: () => undefined }, SimDate, JSON, Math); }
+      catch (e) { return nrErr(node, e.message); }
+      node.err = null;
+      if (out == null) return;
+      if (Array.isArray(out)) out.forEach((o, i) => { if (o != null) (Array.isArray(o) ? o : [o]).forEach(m => m && nrSendPort(node, m, i)); });
+      else nrSendPort(node, out, 0);
+      return;
+    }
+    case "influxdb out": {
+      const pts = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
+      let n = 0;
+      for (const p of pts) {
+        if (!p || !p.measurement || !p.fields) { nrErr(node, "payload needs measurement and fields"); continue; }
+        INFLUX.write(p.measurement, p.tags || {}, p.fields, p.timestamp || SIM.now); n++;
+      }
+      if (n) bus.emit("nr-write", { node: node.id, n });
+      return;
+    }
+    case "mqtt out": {
+      if (!msg.topic) return nrErr(node, "msg.topic is missing");
+      BROKER.publish("node-red", msg.topic, typeof msg.payload === "string" ? msg.payload : JSON.stringify(msg.payload), false);
+      return;
+    }
+    case "debug": nrDebug(node, "msg", msg.payload); return;
+  }
+}
+
+function nrOnBroker(topic, payload, retained) {
+  for (const n of NR.nodes) {
+    if (n.type === "mqtt in" && topicMatch(n.topic, topic)) nrRun(n, { topic, payload, qos: 0, retain: !!retained, _msgid: Math.floor(rnd() * 1e9).toString(16) });
+  }
+}
+
+function nrDeploy() {
+  const errors = [];
+  for (const n of NR.nodes) {
+    if (n.type !== "function") continue;
+    try {
+      n.fn = new Function("msg", "node", "flow", "context", "env", "Date", "JSON", "Math", '"use strict";\n' + FILES.get(n.file));
+      n.err = null;
+    } catch (e) { errors.push(n.name + ": " + e.message); n.err = "deploy: " + e.message; nrDebug(n, "error", "Deploy failed, keeping the previous version. " + e.message); }
+  }
+  return errors;
+}
+
+function nrInit() {
+  NR.nodes = NR_DEFS.map(d => ({ ...d, count: 0, err: null, errCount: 0, fn: null, last: 0, statusText: "" }));
+  NR.nodes.forEach(n => { NR.byId[n.id] = n; });
+  BROKER.connect("node-red", { onMessage: nrOnBroker });
+  [...new Set(NR.nodes.filter(n => n.type === "mqtt in").map(n => n.topic))].forEach(t => BROKER.subscribe("node-red", t));
+  nrDeploy();
+  NR.ready = true;
+}
+
+function nrExportFlows() {
+  const z = "tab_servo";
+  const out = [
+    { id: z, type: "tab", label: "Servo Lab", disabled: false, info: "" },
+    { id: "cfg_broker", type: "mqtt-broker", name: "mosquitto", broker: "mosquitto", port: "1883", clientid: "node-red", autoConnect: true, usetls: false, protocolVersion: "4", keepalive: "60", cleansession: true },
+    { id: "cfg_influx", type: "influxdb", hostname: "influxdb", port: "8181", protocol: "http", database: "servo_lab", name: "InfluxDB", usetls: false, influxdbVersion: "2.0", url: "http://influxdb:8181", timeout: "10", rejectUnauthorized: true }
+  ];
+  for (const n of NR.nodes) {
+    const base = { id: n.id, z, name: n.name, x: n.x + 70, y: n.y + 17, wires: n.wires };
+    if (n.type === "mqtt in") out.push({ ...base, type: "mqtt in", topic: n.topic, qos: "0", datatype: "auto-detect", broker: "cfg_broker", nl: false, rap: true, rh: 0, inputs: 0 });
+    else if (n.type === "json") out.push({ ...base, name: "", type: "json", property: "payload", action: "", pretty: false });
+    else if (n.type === "function") out.push({ ...base, type: "function", func: FILES.get(n.file), outputs: n.wires.length, timeout: 0, noerr: 0, initialize: "", finalize: "", libs: [] });
+    else if (n.type === "influxdb out") out.push({ ...base, type: "influxdb out", influxdb: "cfg_influx", measurement: "", precision: "", retentionPolicy: "", database: "servo_lab", precisionV18FluxV20: "ms", retentionPolicyV18Flux: "", org: "servo", bucket: "servo_lab", wires: [] });
+    else if (n.type === "mqtt out") out.push({ ...base, type: "mqtt out", name: "alert", topic: "", qos: "0", retain: "false", broker: "cfg_broker", wires: [] });
+    else if (n.type === "debug") out.push({ ...base, type: "debug", active: true, tosidebar: true, console: false, tostatus: false, complete: "payload", targetType: "msg", wires: [] });
+  }
+  return JSON.stringify(out, null, 2);
+}
+/* ============ InfluxDB: in-memory time-series store and a SQL engine ============ */
+const INFLUX = {
+  tables: new Map(), writeLog: [], cap: 60000,
+  write(m, tags, fields, ts) {
+    let t = this.tables.get(m);
+    if (!t) { t = { name: m, cols: new Map([["time", "timestamp"]]), rows: [] }; this.tables.set(m, t); }
+    const row = { time: ts };
+    for (const [k, v] of Object.entries(tags)) { if (v == null) continue; row[k] = String(v); if (!t.cols.has(k)) t.cols.set(k, "tag"); }
+    for (const [k, v] of Object.entries(fields)) {
+      if (v == null) continue; row[k] = v;
+      if (!t.cols.has(k)) t.cols.set(k, typeof v === "number" ? "field (float)" : "field (string)");
+    }
+    const r = t.rows;
+    if (!r.length || ts >= r[r.length - 1].time) r.push(row);
+    else { let lo = 0, hi = r.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (r[mid].time <= ts) lo = mid + 1; else hi = mid; } r.splice(lo, 0, row); }
+    if (r.length > this.cap + 2000) r.splice(0, 2000);
+    const tagStr = Object.keys(tags).sort().map(k => "," + k + "=" + String(tags[k]).replace(/[ ,=]/g, "\\$&")).join("");
+    const fldStr = Object.entries(fields).map(([k, v]) => k + "=" + (typeof v === "number" ? v : '"' + v + '"')).join(",");
+    this.writeLog.push(m + tagStr + " " + fldStr + " " + (BigInt(Math.round(ts)) * 1000000n).toString());
+    if (this.writeLog.length > 40) this.writeLog.splice(0, 20);
+  },
+  count() { let n = 0; for (const t of this.tables.values()) n += t.rows.length; return n; }
+};
+
+class SqlError extends Error { constructor(msg, pos) { super(msg); this.pos = pos || 0; } }
+
+const SQL = (() => {
+  const RESERVED = new Set(["select", "from", "where", "group", "by", "order", "limit", "having", "as", "and", "or", "not", "in", "is", "null", "between", "like", "case", "when", "then", "else", "end", "distinct", "desc", "asc", "interval", "true", "false", "offset"]);
+  const AGG = new Set(["avg", "mean", "min", "max", "sum", "count", "stddev", "stddev_samp", "variance", "median", "approx_median", "approx_percentile_cont", "first_value", "last_value"]);
+  const UNITS = { ms: 1, millisecond: 1, milliseconds: 1, s: 1000, sec: 1000, second: 1000, seconds: 1000, m: 60000, min: 60000, minute: 60000, minutes: 60000, h: 3600000, hour: 3600000, hours: 3600000, d: 86400000, day: 86400000, days: 86400000 };
+
+  function parseInterval(str, pos) {
+    const m = /^\s*(\d+(?:\.\d+)?)\s*([a-z]+)\s*$/i.exec(str);
+    if (!m || !(m[2].toLowerCase() in UNITS)) throw new SqlError("Cannot parse interval '" + str + "'. Use for example '5 minutes' or '10 seconds'.", pos);
+    return parseFloat(m[1]) * UNITS[m[2].toLowerCase()];
+  }
+
+  function lex(src) {
+    const toks = []; let i = 0;
+    const re = /\s+|--[^\n]*|\/\*[\s\S]*?\*\/|(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|'((?:[^']|'')*)'|"([^"]+)"|([A-Za-z_][A-Za-z0-9_$]*)|(<=|>=|<>|!=|[=<>+\-*\/%(),.;])/y;
+    while (i < src.length) {
+      re.lastIndex = i;
+      const m = re.exec(src);
+      if (!m) throw new SqlError("Unexpected character '" + src[i] + "' at position " + i, i);
+      if (m[1] !== undefined) toks.push({ k: "num", v: parseFloat(m[1]), p: i });
+      else if (m[2] !== undefined) toks.push({ k: "str", v: m[2].replace(/''/g, "'"), p: i });
+      else if (m[3] !== undefined) toks.push({ k: "id", v: m[3], p: i, q: true });
+      else if (m[4] !== undefined) toks.push({ k: "id", v: m[4], p: i, l: m[4].toLowerCase() });
+      else if (m[5] !== undefined) toks.push({ k: "op", v: m[5], p: i });
+      i = re.lastIndex;
+    }
+    toks.push({ k: "eof", p: src.length });
+    return toks;
+  }
+
+  class Parser {
+    constructor(src) { this.src = src; this.t = lex(src); this.i = 0; }
+    peek() { return this.t[this.i]; }
+    next() { return this.t[this.i++]; }
+    kw(w) { const t = this.t[this.i]; return t.k === "id" && !t.q && t.l === w; }
+    op(o) { const t = this.t[this.i]; return t.k === "op" && t.v === o; }
+    eatKw(w) { if (this.kw(w)) { this.i++; return true; } return false; }
+    needKw(w) { if (!this.eatKw(w)) this.fail("Expected " + w.toUpperCase()); }
+    needOp(o) { if (!this.op(o)) this.fail("Expected '" + o + "'"); this.i++; }
+    fail(msg) {
+      const t = this.peek();
+      const got = t.k === "eof" ? "end of query" : "'" + (t.v !== undefined ? t.v : "") + "'";
+      throw new SqlError(msg + " but found " + got + " at position " + t.p, t.p);
+    }
+    parse() {
+      this.needKw("select");
+      const q = { distinct: false, select: [], from: null, where: null, group: [], having: null, order: [], limit: null };
+      if (this.eatKw("distinct")) q.distinct = true;
+      q.select.push(this.selItem());
+      while (this.op(",")) { this.i++; q.select.push(this.selItem()); }
+      this.needKw("from");
+      const tn = this.next();
+      if (tn.k !== "id") this.fail("Expected a table name");
+      q.from = tn.v;
+      if (this.op(".")) { this.i++; const t2 = this.next(); q.from = t2.v; }
+      const al = this.peek();
+      if (al.k === "id" && (al.q || !RESERVED.has(al.l))) this.i++;
+      if (this.eatKw("where")) q.where = this.expr();
+      if (this.eatKw("group")) { this.needKw("by"); q.group.push(this.expr()); while (this.op(",")) { this.i++; q.group.push(this.expr()); } }
+      if (this.eatKw("having")) q.having = this.expr();
+      if (this.eatKw("order")) {
+        this.needKw("by");
+        do {
+          if (this.op(",")) this.i++;
+          const e = this.expr(); let desc = false;
+          if (this.eatKw("desc")) desc = true; else this.eatKw("asc");
+          q.order.push({ e, desc });
+        } while (this.op(","));
+      }
+      if (this.eatKw("limit")) { const t = this.next(); if (t.k !== "num") this.fail("Expected a number after LIMIT"); q.limit = t.v; }
+      if (this.op(";")) this.i++;
+      if (this.peek().k !== "eof") this.fail("Unexpected input");
+      return q;
+    }
+    selItem() {
+      const start = this.peek().p;
+      if (this.op("*")) { this.i++; return { e: { t: "star" }, alias: null, text: "*" }; }
+      const e = this.expr();
+      const text = this.src.slice(start, this.peek().p).trim();
+      let alias = null;
+      if (this.eatKw("as")) { const t = this.next(); if (t.k !== "id" && t.k !== "str") this.fail("Expected an alias name"); alias = t.v; }
+      else { const t = this.peek(); if (t.k === "id" && (t.q || !RESERVED.has(t.l))) { this.i++; alias = t.v; } }
+      return { e, alias, text };
+    }
+    expr() { return this.or(); }
+    or() { let l = this.and(); while (this.kw("or")) { this.i++; l = { t: "bin", op: "or", l, r: this.and() }; } return l; }
+    and() { let l = this.not(); while (this.kw("and")) { this.i++; l = { t: "bin", op: "and", l, r: this.not() }; } return l; }
+    not() { if (this.kw("not")) { this.i++; return { t: "un", op: "not", e: this.not() }; } return this.cmp(); }
+    cmp() {
+      let l = this.add();
+      for (;;) {
+        const t = this.peek();
+        if (t.k === "op" && ["=", "<", ">", "<=", ">=", "<>", "!="].includes(t.v)) { this.i++; l = { t: "bin", op: t.v, l, r: this.add() }; continue; }
+        const save = this.i; let neg = false;
+        if (this.kw("not")) { neg = true; this.i++; }
+        if (this.kw("between")) { this.i++; const lo = this.add(); this.needKw("and"); const hi = this.add(); l = { t: "between", e: l, lo, hi, not: neg }; continue; }
+        if (this.kw("in")) {
+          this.i++; this.needOp("("); const list = [this.expr()];
+          while (this.op(",")) { this.i++; list.push(this.expr()); }
+          this.needOp(")"); l = { t: "in", e: l, list, not: neg }; continue;
+        }
+        if (this.kw("like")) { this.i++; l = { t: "like", e: l, p: this.add(), not: neg }; continue; }
+        if (neg) this.i = save;
+        if (this.kw("is")) { this.i++; let n = false; if (this.eatKw("not")) n = true; this.needKw("null"); l = { t: "is", e: l, not: n }; continue; }
+        break;
+      }
+      return l;
+    }
+    add() {
+      let l = this.mul();
+      while (this.op("+") || this.op("-")) { const o = this.next().v; l = { t: "bin", op: o, l, r: this.mul() }; }
+      return l;
+    }
+    mul() {
+      let l = this.unary();
+      while (this.op("*") || this.op("/") || this.op("%")) { const o = this.next().v; l = { t: "bin", op: o, l, r: this.unary() }; }
+      return l;
+    }
+    unary() { if (this.op("-")) { this.i++; return { t: "un", op: "neg", e: this.unary() }; } return this.primary(); }
+    primary() {
+      const t = this.next();
+      if (t.k === "num") return { t: "num", v: t.v };
+      if (t.k === "str") return { t: "str", v: t.v };
+      if (t.k === "op" && t.v === "(") { const e = this.expr(); this.needOp(")"); return e; }
+      if (t.k === "op" && t.v === "*") return { t: "star" };
+      if (t.k === "id") {
+        if (!t.q) {
+          if (t.l === "null") return { t: "null" };
+          if (t.l === "true") return { t: "bool", v: true };
+          if (t.l === "false") return { t: "bool", v: false };
+          if (t.l === "interval") { const s = this.next(); if (s.k !== "str") { this.i--; this.fail("Expected a quoted interval such as '5 minutes'"); } return { t: "num", v: parseInterval(s.v, s.p), interval: true }; }
+          if (t.l === "case") return this.caseExpr();
+        }
+        if (!t.q && this.op("(")) {
+          this.i++; const args = []; let distinct = false, ord = null;
+          if (this.eatKw("distinct")) distinct = true;
+          if (!this.op(")")) { args.push(this.expr()); while (this.op(",")) { this.i++; args.push(this.expr()); } }
+          if (this.eatKw("order")) { this.needKw("by"); const e = this.expr(); let desc = false; if (this.eatKw("desc")) desc = true; else this.eatKw("asc"); ord = { e, desc }; }
+          this.needOp(")");
+          return { t: "fn", name: t.l, args, distinct, ord, pos: t.p };
+        }
+        if (this.op(".")) { this.i++; const c = this.next(); return { t: "col", name: c.v, pos: c.p }; }
+        return { t: "col", name: t.v, pos: t.p };
+      }
+      this.i--; this.fail("Expected an expression");
+    }
+    caseExpr() {
+      const whens = []; let els = null;
+      while (this.eatKw("when")) { const c = this.expr(); this.needKw("then"); whens.push({ c, v: this.expr() }); }
+      if (!whens.length) this.fail("Expected WHEN");
+      if (this.eatKw("else")) els = this.expr();
+      this.needKw("end");
+      return { t: "case", whens, else: els };
+    }
+  }
+
+  function mapKids(n, f) {
+    switch (n.t) {
+      case "fn": return { ...n, args: n.args.map(f), ord: n.ord ? { ...n.ord, e: f(n.ord.e) } : null };
+      case "bin": return { ...n, l: f(n.l), r: f(n.r) };
+      case "un": return { ...n, e: f(n.e) };
+      case "case": return { ...n, whens: n.whens.map(w => ({ c: f(w.c), v: f(w.v) })), else: n.else ? f(n.else) : null };
+      case "between": return { ...n, e: f(n.e), lo: f(n.lo), hi: f(n.hi) };
+      case "in": return { ...n, e: f(n.e), list: n.list.map(f) };
+      case "like": return { ...n, e: f(n.e), p: f(n.p) };
+      case "is": return { ...n, e: f(n.e) };
+      default: return n;
+    }
+  }
+  function kids(n) { const out = []; mapKids(n, k => { out.push(k); return k; }); return out; }
+  function hasAgg(n) { return !!n && ((n.t === "fn" && AGG.has(n.name)) || kids(n).some(hasAgg)); }
+  function walk(n, f) { if (!n) return; f(n); kids(n).forEach(k => walk(k, f)); }
+  function isConst(n) { let c = true; walk(n, x => { if (x.t === "col") c = false; }); return c; }
+
+  const truthy = v => v !== null && v !== undefined && v !== false && v !== 0;
+  function coerce(a, b) {
+    if (typeof a === "number" && typeof b === "string" && isNaN(+b)) { const d = Date.parse(b); if (!isNaN(d)) b = d; }
+    else if (typeof b === "number" && typeof a === "string" && isNaN(+a)) { const d = Date.parse(a); if (!isNaN(d)) a = d; }
+    return [a, b];
+  }
+  function cmpVals(a, b) {
+    [a, b] = coerce(a, b);
+    if (typeof a === "number" && typeof b === "number") return a - b;
+    return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+  }
+
+  function ev(n, cx) {
+    switch (n.t) {
+      case "num": case "str": case "bool": return n.v;
+      case "null": return null;
+      case "star": return 1;
+      case "col": { const v = cx.row[n.name]; return v === undefined ? null : v; }
+      case "un": { const v = ev(n.e, cx); if (n.op === "not") return v == null ? null : !truthy(v); return v == null ? null : -v; }
+      case "bin": return binop(n, cx);
+      case "between": {
+        const v = ev(n.e, cx), lo = ev(n.lo, cx), hi = ev(n.hi, cx);
+        if (v == null || lo == null || hi == null) return null;
+        const r = cmpVals(v, lo) >= 0 && cmpVals(v, hi) <= 0; return n.not ? !r : r;
+      }
+      case "in": {
+        const v = ev(n.e, cx); if (v == null) return null;
+        const r = n.list.some(x => { const w = ev(x, cx); return w != null && cmpVals(v, w) === 0; }); return n.not ? !r : r;
+      }
+      case "like": {
+        const v = ev(n.e, cx), p = ev(n.p, cx); if (v == null || p == null) return null;
+        const re = new RegExp("^" + String(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".") + "$");
+        const r = re.test(String(v)); return n.not ? !r : r;
+      }
+      case "is": { const v = ev(n.e, cx); const r = v == null; return n.not ? !r : r; }
+      case "case": {
+        for (const w of n.whens) if (truthy(ev(w.c, cx))) return ev(w.v, cx);
+        return n.else ? ev(n.else, cx) : null;
+      }
+      case "fn": return AGG.has(n.name) ? aggregate(n, cx) : scalar(n, cx);
+    }
+    throw new SqlError("Cannot evaluate expression", 0);
+  }
+
+  function binop(n, cx) {
+    const l = ev(n.l, cx);
+    if (n.op === "and") { if (l !== null && !truthy(l)) return false; const r = ev(n.r, cx); if (r !== null && !truthy(r)) return false; return (l === null || r === null) ? null : true; }
+    if (n.op === "or") { if (truthy(l)) return true; const r = ev(n.r, cx); if (truthy(r)) return true; return (l === null || r === null) ? null : false; }
+    const r = ev(n.r, cx);
+    if (l == null || r == null) return null;
+    switch (n.op) {
+      case "+": return l + r; case "-": return l - r; case "*": return l * r;
+      case "/": return r === 0 ? null : l / r; case "%": return r === 0 ? null : l % r;
+      case "=": return cmpVals(l, r) === 0; case "<>": case "!=": return cmpVals(l, r) !== 0;
+      case "<": return cmpVals(l, r) < 0; case "<=": return cmpVals(l, r) <= 0;
+      case ">": return cmpVals(l, r) > 0; case ">=": return cmpVals(l, r) >= 0;
+    }
+    throw new SqlError("Unknown operator " + n.op, 0);
+  }
+
+  function scalar(n, cx) {
+    const a = n.args.map(x => ev(x, cx));
+    const nul = () => a.some(v => v == null);
+    switch (n.name) {
+      case "abs": return nul() ? null : Math.abs(a[0]);
+      case "round": { if (a[0] == null) return null; const f = Math.pow(10, a[1] || 0); return Math.round(a[0] * f) / f; }
+      case "floor": return nul() ? null : Math.floor(a[0]);
+      case "ceil": case "ceiling": return nul() ? null : Math.ceil(a[0]);
+      case "sqrt": return nul() || a[0] < 0 ? null : Math.sqrt(a[0]);
+      case "power": case "pow": return nul() ? null : Math.pow(a[0], a[1]);
+      case "ln": return nul() || a[0] <= 0 ? null : Math.log(a[0]);
+      case "log10": return nul() || a[0] <= 0 ? null : Math.log10(a[0]);
+      case "exp": return nul() ? null : Math.exp(a[0]);
+      case "sign": return nul() ? null : Math.sign(a[0]);
+      case "least": { const v = a.filter(x => x != null); return v.length ? v.reduce((x, y) => cmpVals(x, y) <= 0 ? x : y) : null; }
+      case "greatest": { const v = a.filter(x => x != null); return v.length ? v.reduce((x, y) => cmpVals(x, y) >= 0 ? x : y) : null; }
+      case "coalesce": { for (const v of a) if (v != null) return v; return null; }
+      case "lower": return a[0] == null ? null : String(a[0]).toLowerCase();
+      case "upper": return a[0] == null ? null : String(a[0]).toUpperCase();
+      case "now": return SIM.now;
+      case "date_bin": {
+        if (a[1] == null) return null;
+        if (!(a[0] > 0)) throw new SqlError("date_bin() needs a positive interval", n.pos);
+        const o = a[2] == null ? 0 : (typeof a[2] === "string" ? Date.parse(a[2]) : a[2]);
+        return Math.floor((a[1] - o) / a[0]) * a[0] + o;
+      }
+      case "date_trunc": {
+        const ms = UNITS[String(a[0]).toLowerCase()];
+        if (!ms) throw new SqlError("date_trunc() unit must be second, minute, hour or day", n.pos);
+        return a[1] == null ? null : Math.floor(a[1] / ms) * ms;
+      }
+    }
+    throw new SqlError("Unknown function " + n.name + "()", n.pos);
+  }
+
+  function percentile(vals, p) {
+    if (!vals.length) return null;
+    const s = vals.slice().sort((x, y) => x - y);
+    const idx = clamp(p, 0, 1) * (s.length - 1), lo = Math.floor(idx), hi = Math.ceil(idx);
+    return s[lo] + (s[hi] - s[lo]) * (idx - lo);
+  }
+
+  function aggregate(n, cx) {
+    const rows = cx.rows;
+    if (!rows) throw new SqlError(n.name + "() is an aggregate and cannot be used here (use HAVING instead of WHERE)", n.pos);
+    const a0 = n.args[0];
+    const vals = () => { const out = []; for (const r of rows) { const v = ev(a0, { row: r, cols: cx.cols }); if (v != null) out.push(v); } return out; };
+    const nums = () => vals().filter(v => typeof v === "number");
+    switch (n.name) {
+      case "count": { if (!a0 || a0.t === "star") return rows.length; const v = vals(); return n.distinct ? new Set(v).size : v.length; }
+      case "avg": case "mean": { const v = nums(); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; }
+      case "sum": { const v = nums(); return v.length ? v.reduce((x, y) => x + y, 0) : null; }
+      case "min": { const v = vals(); return v.length ? v.reduce((x, y) => cmpVals(x, y) <= 0 ? x : y) : null; }
+      case "max": { const v = vals(); return v.length ? v.reduce((x, y) => cmpVals(x, y) >= 0 ? x : y) : null; }
+      case "stddev": case "stddev_samp": case "variance": {
+        const v = nums(); if (v.length < 2) return null;
+        const m = v.reduce((x, y) => x + y, 0) / v.length;
+        const varc = v.reduce((x, y) => x + (y - m) * (y - m), 0) / (v.length - 1);
+        return n.name === "variance" ? varc : Math.sqrt(varc);
+      }
+      case "median": case "approx_median": return percentile(nums(), 0.5);
+      case "approx_percentile_cont": {
+        if (n.args.length < 2) throw new SqlError("approx_percentile_cont(expr, percentile) needs two arguments", n.pos);
+        return percentile(nums(), ev(n.args[1], { row: {}, cols: cx.cols, rows: null }));
+      }
+      case "first_value": case "last_value": {
+        if (!rows.length) return null;
+        let list = rows;
+        if (n.ord) {
+          const keyed = rows.map(r => [ev(n.ord.e, { row: r, cols: cx.cols }), r]);
+          keyed.sort((x, y) => (n.ord.desc ? -1 : 1) * cmpVals(x[0], y[0]));
+          list = keyed.map(k => k[1]);
+        }
+        const r = n.name === "first_value" ? list[0] : list[list.length - 1];
+        return ev(a0, { row: r, cols: cx.cols });
+      }
+    }
+    throw new SqlError("Unknown aggregate " + n.name + "()", n.pos);
+  }
+
+  const lowerBound = (rows, v) => { let lo = 0, hi = rows.length; while (lo < hi) { const m = (lo + hi) >> 1; if (rows[m].time < v) lo = m + 1; else hi = m; } return lo; };
+  const upperBound = (rows, v) => { let lo = 0, hi = rows.length; while (lo < hi) { const m = (lo + hi) >> 1; if (rows[m].time <= v) lo = m + 1; else hi = m; } return lo; };
+  function timeBounds(where) {
+    const b = { lo: null, hi: null };
+    (function w(x) {
+      if (x.t === "bin" && x.op === "and") { w(x.l); w(x.r); return; }
+      if (x.t !== "bin" || ![">", ">=", "<", "<="].includes(x.op)) return;
+      const left = x.l.t === "col" && x.l.name === "time", right = x.r.t === "col" && x.r.name === "time";
+      if (!left && !right) return;
+      const other = left ? x.r : x.l;
+      if (!isConst(other)) return;
+      let v; try { v = ev(other, { row: {}, cols: new Set() }); } catch (e) { return; }
+      if (typeof v === "string") v = Date.parse(v);
+      if (typeof v !== "number" || isNaN(v)) return;
+      let op = x.op; if (right) op = { ">": "<", ">=": "<=", "<": ">", "<=": ">=" }[op];
+      if (op === ">" || op === ">=") b.lo = b.lo == null ? v : Math.max(b.lo, v); else b.hi = b.hi == null ? v : Math.min(b.hi, v);
+    })(where);
+    return b;
+  }
+
+  function run(sql, macros) {
+    const t0 = performance.now();
+    if (macros) for (const k of Object.keys(macros)) sql = sql.split(k).join(macros[k]);
+    const q = new Parser(sql).parse();
+    const tbl = INFLUX.tables.get(q.from);
+    if (!tbl) throw new SqlError("Table '" + q.from + "' not found. Available tables: " + ([...INFLUX.tables.keys()].join(", ") || "none"), 0);
+    const cols = new Set(tbl.cols.keys());
+    const sel = [];
+    q.select.forEach(s => { if (s.e.t === "star") { for (const c of tbl.cols.keys()) sel.push({ e: { t: "col", name: c }, alias: null, text: c }); } else sel.push(s); });
+    const aliasMap = new Map(); sel.forEach(s => { if (s.alias) aliasMap.set(s.alias, s.e); });
+    const sub = (n, aliasFirst) => {
+      if (!n) return n;
+      if (n.t === "col") return (aliasMap.has(n.name) && (aliasFirst || !cols.has(n.name))) ? aliasMap.get(n.name) : n;
+      return mapKids(n, k => sub(k, aliasFirst));
+    };
+    const ordinal = e => (e.t === "num" && !e.interval && Number.isInteger(e.v) && e.v >= 1 && e.v <= sel.length) ? e.v - 1 : -1;
+    const gexprs = q.group.map(g => { const o = ordinal(g); return o >= 0 ? sel[o].e : sub(g, false); });
+    const having = q.having ? sub(q.having, true) : null;
+    const orders = q.order.map(o => { const k = ordinal(o.e); return k >= 0 ? { ord: k, desc: o.desc } : { e: sub(o.e, true), desc: o.desc }; });
+    if (q.where && hasAgg(q.where)) throw new SqlError("Aggregate functions are not allowed in WHERE. Use HAVING.", 0);
+    const check = n => walk(n, x => { if (x.t === "col" && !cols.has(x.name)) throw new SqlError("Column '" + x.name + "' not found in table '" + q.from + "'. Available columns: " + [...cols].join(", "), x.pos); });
+    [q.where, having, ...gexprs, ...sel.map(s => s.e), ...orders.map(o => o.e)].forEach(check);
+
+    let rows = tbl.rows;
+    if (q.where) {
+      const b = timeBounds(q.where);
+      if (b.lo != null || b.hi != null) rows = rows.slice(b.lo != null ? lowerBound(rows, b.lo) : 0, b.hi != null ? upperBound(rows, b.hi) : rows.length);
+      const kept = [];
+      for (const r of rows) if (truthy(ev(q.where, { row: r, cols }))) kept.push(r);
+      rows = kept;
+    }
+    const scanned = rows.length;
+    const grouped = gexprs.length > 0 || sel.some(s => hasAgg(s.e)) || (having && hasAgg(having)) || orders.some(o => o.e && hasAgg(o.e));
+    let units;
+    if (grouped) {
+      const groups = new Map();
+      if (gexprs.length) {
+        for (const r of rows) {
+          const key = gexprs.map(g => { const v = ev(g, { row: r, cols }); return v === null ? "\u0000" : String(v); }).join("\u0001");
+          let a = groups.get(key); if (!a) { a = []; groups.set(key, a); } a.push(r);
+        }
+      } else groups.set("", rows);
+      units = [...groups.values()].map(rs => ({ rows: rs, row: rs[0] || {} }));
+    } else units = rows.map(r => ({ rows: null, row: r }));
+
+    let out = [];
+    for (const u of units) {
+      const cx = { row: u.row, rows: u.rows, cols };
+      if (having && !truthy(ev(having, cx))) continue;
+      const vals = sel.map(s => ev(s.e, cx));
+      const keys = orders.map(o => o.ord != null ? vals[o.ord] : ev(o.e, cx));
+      out.push({ vals, keys });
+    }
+    if (q.distinct) { const seen = new Set(); out = out.filter(o => { const k = JSON.stringify(o.vals); if (seen.has(k)) return false; seen.add(k); return true; }); }
+    if (orders.length) {
+      out.sort((x, y) => {
+        for (let i = 0; i < orders.length; i++) {
+          const a = x.keys[i], b = y.keys[i];
+          if (a == null && b == null) continue;
+          if (a == null) return 1; if (b == null) return -1;
+          const c = cmpVals(a, b); if (c) return orders[i].desc ? -c : c;
+        }
+        return 0;
+      });
+    }
+    if (q.limit != null) out = out.slice(0, q.limit);
+    const isTimeExpr = e => (e.t === "col" && e.name === "time") || (e.t === "fn" && (e.name === "date_bin" || e.name === "date_trunc"));
+    return {
+      columns: sel.map(s => ({ name: s.alias || (s.e.t === "col" ? s.e.name : s.text), time: isTimeExpr(s.e) })),
+      rows: out.map(o => o.vals), scanned, ms: performance.now() - t0
+    };
+  }
+
+  return { run, parse: src => new Parser(src).parse() };
+})();
+
+function fmtVal(v, isTime) {
+  if (v == null) return "";
+  if (isTime && typeof v === "number") return iso(v) + "Z";
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(+v.toFixed(4));
+  return String(v);
+}
+/* ============ Dashboard client on the broker, command helper, history seeding ============ */
+const DEVICE_ID = "esp32-01";
+const T_CMD = "servo/" + DEVICE_ID + "/cmd";
+const FB = { last: null, t: 0, online: null, hist: [], alerts: [], mode: "light" };
+
+function webuiOnMessage(topic, payload) {
+  if (/\/state$/.test(topic)) {
+    try {
+      const m = JSON.parse(payload);
+      FB.last = m; FB.t = SIM.now;
+      FB.hist.push({ t: SIM.now, angle: m.angle, setpoint: m.setpoint });
+      if (FB.hist.length > 150) FB.hist.shift();
+    } catch (e) { /* ignore malformed telemetry */ }
+  } else if (/\/status$/.test(topic)) {
+    FB.online = payload === "online";
+  } else if (/\/alert$/.test(topic)) {
+    try {
+      const a = JSON.parse(payload);
+      FB.alerts.unshift({ ...a, t: SIM.now }); FB.alerts.length = Math.min(FB.alerts.length, 30);
+      bus.emit("alert", a);
+    } catch (e) { /* ignore */ }
+  }
+}
+
+function webuiInit() {
+  BROKER.connect("web-ui", { onMessage: webuiOnMessage });
+  ["servo/+/state", "servo/+/status", "servo/+/alert"].forEach(f => BROKER.subscribe("web-ui", f));
+}
+
+function sendCmd(obj) { BROKER.publish("web-ui", T_CMD, JSON.stringify(obj), false); }
+
+/* Fast-forward the real firmware, broker, flow and database through a scripted three minutes. */
+const SCENARIO = [
+  [18, () => sendCmd({ lamp: 70 })],
+  [30, () => sendCmd({ lamp: 25 })],
+  [45, () => sendCmd({ lamp: 55 })],
+  [55, () => { SERVO.load = 0.7; }],
+  [58, () => sendCmd({ lamp: 100 })],
+  [66, () => sendCmd({ lamp: 20 })],
+  [74, () => sendCmd({ lamp: 90 })],
+  [78, () => { SERVO.load = 0.2; }],
+  [85, () => setWifi(false)],
+  [91, () => setWifi(true)],
+  [100, () => sendCmd({ lamp: 60 })],
+  [112, () => sendCmd({ lamp: 15 })],
+  [125, () => sendCmd({ lamp: 80 })],
+  [130, () => { SERVO.load = 0; }],
+  [144, () => sendCmd({ lamp: 90 })],
+  [155, () => sendCmd({ lamp: 30 })],
+  [170, () => sendCmd({ lamp: 40 })]
+];
+
+function seedHistory() {
+  BROKER.muted = true;
+  const end = Date.now(), start = SIM.now;
+  let k = 0;
+  ESP.flash(FILES.get("esp-js"));
+  while (SIM.now < end) {
+    const rel = (SIM.now - start) / 1000;
+    while (k < SCENARIO.length && SCENARIO[k][0] <= rel) { SCENARIO[k][1](); k++; }
+    simStep();
+  }
+  BROKER.muted = false;
+  BROKER.stats = { pub: 0, del: 0, bytes: 0 }; BROKER.win = [];
+  ESP.serial = ESP.serial.slice(-14);
+  NR.debug = [];
+  FB.alerts.forEach(a => { a.old = true; });
+}
+/* ============ UI toolkit: syntax highlighting, code editor, canvas charts ============ */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+/* ---- syntax highlighting ---- */
+const KW = {
+  js: new Set("const let var function return if else for while do switch case break continue new try catch throw typeof instanceof in of class async await null undefined true false this".split(" ")),
+  cpp: new Set("int float double long unsigned char bool void const static volatile struct class return if else for while switch case break continue new delete true false nullptr sizeof uint8_t uint16_t uint32_t byte".split(" ")),
+  sql: new Set("select from where group by order limit having as and or not in is null between like case when then else end distinct desc asc interval offset".split(" "))
+};
+function tokenize(code, re, classify) {
+  let out = "", last = 0, m; re.lastIndex = 0;
+  while ((m = re.exec(code))) {
+    if (m[0] === "") { re.lastIndex++; continue; }
+    out += esc(code.slice(last, m.index));
+    const cls = classify(m, code);
+    out += cls ? '<span class="' + cls + '">' + esc(m[0]) + "</span>" : esc(m[0]);
+    last = m.index + m[0].length;
+  }
+  return out + esc(code.slice(last));
+}
+const nextIsParen = (code, m) => /^\s*\(/.test(code.slice(m.index + m[0].length, m.index + m[0].length + 6));
+const HL = {
+  js: code => tokenize(code, /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|(\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b)|([A-Za-z_$][\w$]*)/gi,
+    (m, c) => m[1] ? "c" : m[2] ? "s" : m[3] ? "n" : KW.js.has(m[4]) ? "k" : nextIsParen(c, m) ? "f" : ""),
+  cpp: code => tokenize(code, /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(#\s*[a-z]+)|(\b\d+(?:\.\d+)?f?\b)|([A-Za-z_][\w]*)/gi,
+    (m, c) => m[1] ? "c" : m[2] ? "s" : m[3] ? "k" : m[4] ? "n" : KW.cpp.has(m[5]) ? "k" : nextIsParen(c, m) ? "f" : ""),
+  sql: code => tokenize(code, /(--[^\n]*)|('(?:[^']|'')*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_]\w*)/g,
+    (m, c) => m[1] ? "c" : m[2] ? "s" : m[3] ? "n" : KW.sql.has(m[4].toLowerCase()) ? "k" : nextIsParen(c, m) ? "f" : ""),
+  conf: code => tokenize(code, /(#[^\n]*)|("(?:[^"\\\n]|\\.)*"|'[^'\n]*')|(\b\d+(?:\.\d+)?\b)|(^[ \t]*[A-Za-z_][\w-]*)/gm,
+    m => m[1] ? "c" : m[2] ? "s" : m[3] ? "n" : "k"),
+  yaml: code => tokenize(code, /(#[^\n]*)|("(?:[^"\\\n]|\\.)*"|'[^'\n]*')|(\b\d+(?:\.\d+)?\b)|(^[ \t-]*[A-Za-z_][\w.-]*(?=:))/gm,
+    m => m[1] ? "c" : m[2] ? "s" : m[3] ? "n" : "f"),
+  json: code => tokenize(code, /("(?:\\.|[^"\\\n])*")|(-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b)|(\btrue\b|\bfalse\b|\bnull\b)/g,
+    (m, c) => m[1] ? (/^\s*:/.test(c.slice(m.index + m[0].length, m.index + m[0].length + 4)) ? "f" : "s") : m[2] ? "n" : "k")
+};
+
+/* ---- code editor: textarea over a highlighted layer ---- */
+const filesRef = id => { const d = FILES.defs[id]; return { id, name: d.name, lang: d.lang, get: () => FILES.get(id), set: v => FILES.set(id, v), reset: () => FILES.reset(id) }; };
+
+function createIDE(host, opt) {
+  host.innerHTML = '<div class="ide"><div class="ide-bar"><div class="ide-tabs" role="tablist"></div><div class="ide-act"></div></div>' +
+    '<div class="ide-body"><div class="ide-gutter"><div class="ide-gin"></div></div><div class="ide-edit"><pre class="ide-hl" aria-hidden="true"></pre>' +
+    '<textarea class="ide-ta" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Code editor"></textarea></div></div>' +
+    '<div class="ide-status"><span class="pos">Ln 1, Col 1</span><span class="msg"></span><span class="lang"></span></div></div>';
+  const root = $(".ide", host);
+  if (opt.hue) root.style.setProperty("--hue", opt.hue);
+  if (opt.height) root.style.setProperty("--ide-h", opt.height + "px");
+  const tabs = $(".ide-tabs", root), act = $(".ide-act", root), gin = $(".ide-gin", root), hl = $(".ide-hl", root), ta = $(".ide-ta", root);
+  const posEl = $(".pos", root), msgEl = $(".msg", root), langEl = $(".lang", root);
+  const ide = { files: opt.files, cur: null, escTab: false, errLine: 0 };
+
+  const render = () => {
+    const code = ta.value;
+    hl.innerHTML = (HL[ide.cur.lang] || esc)(code) + "\n";
+    const n = code.split("\n").length;
+    let g = ""; for (let i = 1; i <= n; i++) g += '<div' + (i === ide.errLine ? ' class="ln-err"' : "") + ">" + i + "</div>";
+    gin.innerHTML = g;
+    sync();
+  };
+  const sync = () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; gin.style.transform = "translateY(" + (-ta.scrollTop) + "px)"; };
+  const updatePos = () => {
+    const before = ta.value.slice(0, ta.selectionStart).split("\n");
+    posEl.textContent = "Ln " + before.length + ", Col " + (before[before.length - 1].length + 1);
+  };
+  ide.status = (text, kind) => { msgEl.textContent = text || ""; msgEl.className = "msg " + (kind || ""); };
+  ide.markError = line => { ide.errLine = line || 0; render(); };
+  ide.open = id => {
+    const f = ide.files.find(x => x.id === id) || ide.files[0];
+    ide.cur = f; ide.errLine = 0;
+    ta.value = f.get(); ta.readOnly = !!f.readOnly;
+    langEl.textContent = f.lang + (f.readOnly ? " · read only" : "");
+    $$(".ide-tab", tabs).forEach(b => { b.classList.toggle("on", b.dataset.id === f.id); b.setAttribute("aria-selected", b.dataset.id === f.id); });
+    render(); updatePos();
+    if (opt.onOpen) opt.onOpen(f.id, ide);
+  };
+  ide.refresh = () => { if (ide.cur.readOnly || document.activeElement !== ta) { ta.value = ide.cur.get(); render(); } };
+  ide.text = () => { const s = ta.value.slice(ta.selectionStart, ta.selectionEnd); return s.trim() ? s : ta.value; };
+  ide.run = () => { if (opt.onRun) opt.onRun(ide); };
+  /* the selection, or the ;-terminated statement around the caret */
+  ide.stmt = () => {
+    const v = ta.value, a = ta.selectionStart, b = ta.selectionEnd;
+    if (b > a && v.slice(a, b).trim()) return { text: v.slice(a, b), offset: a };
+    const segs = []; let s0 = 0, inS = false, inC = false;
+    for (let i = 0; i < v.length; i++) {
+      const ch = v[i];
+      if (inC) { if (ch === "\n") inC = false; continue; }
+      if (inS) { if (ch === "'") inS = false; continue; }
+      if (ch === "'") inS = true; else if (ch === "-" && v[i + 1] === "-") inC = true; else if (ch === ";") { segs.push([s0, i + 1]); s0 = i + 1; }
+    }
+    segs.push([s0, v.length]);
+    const blank = t => !t.replace(/--[^\n]*/g, "").trim();
+    const real = segs.filter(([x, y]) => !blank(v.slice(x, y)));
+    const pick = real.find(([x, y]) => a >= x && a <= y) || real.find(([x]) => x >= a) || real[real.length - 1];
+    return pick ? { text: v.slice(pick[0], pick[1]), offset: pick[0] } : { text: v, offset: 0 };
+  };
+  ide.lineAt = idx => ta.value.slice(0, Math.max(0, idx)).split("\n").length;
+
+  ide.files.forEach(f => {
+    const b = document.createElement("button");
+    b.className = "ide-tab"; b.dataset.id = f.id; b.textContent = f.name; b.setAttribute("role", "tab");
+    b.onclick = () => ide.open(f.id);
+    tabs.appendChild(b);
+  });
+  const addBtn = (label, cls, fn) => { const b = document.createElement("button"); b.className = "btn sm " + (cls || ""); b.textContent = label; b.onclick = () => fn(ide); act.appendChild(b); return b; };
+  (opt.actions || []).forEach(a => addBtn(a.label, a.primary ? "primary" : "", a.onClick));
+  addBtn("Copy", "", () => {
+    const t = ide.cur.get();
+    const fallback = () => { ta.focus(); ta.select(); ide.status("Selected. Press Ctrl+C to copy.", ""); };
+    try { navigator.clipboard.writeText(t).then(() => ide.status("Copied " + ide.cur.name, "ok"), fallback); } catch (e) { fallback(); }
+  });
+  if (!opt.noReset) addBtn("Reset", "", () => { if (ide.cur.reset && !ide.cur.readOnly) { ide.cur.reset(); ide.open(ide.cur.id); ide.status("Restored the original " + ide.cur.name, "ok"); } });
+
+  ta.addEventListener("input", () => { if (!ide.cur.readOnly) ide.cur.set(ta.value); ide.errLine = 0; render(); updatePos(); if (opt.onChange) opt.onChange(ide.cur.id, ta.value); });
+  ta.addEventListener("scroll", sync);
+  ["keyup", "click", "select"].forEach(ev => ta.addEventListener(ev, updatePos));
+  ta.addEventListener("keydown", e => {
+    if (e.key === "Escape") { ide.escTab = true; ide.status("Tab moves focus. Press any key to edit.", ""); return; }
+    const skip = ide.escTab; ide.escTab = false;
+    if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.key.toLowerCase() === "s")) { e.preventDefault(); ide.run(); return; }
+    if (ta.readOnly) return;
+    if (e.key === "Tab" && !skip && !e.shiftKey) { e.preventDefault(); insert("  "); }
+    else if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      const s = ta.selectionStart, line = ta.value.slice(ta.value.lastIndexOf("\n", s - 1) + 1, s);
+      const indent = (/^\s*/.exec(line) || [""])[0] + (/[{(\[:]\s*$/.test(line) && ide.cur.lang !== "sql" ? "  " : "");
+      e.preventDefault(); insert("\n" + indent);
+    }
+  });
+  function insert(text) {
+    ta.focus();
+    let done = false;
+    try { done = document.execCommand("insertText", false, text); } catch (e) { done = false; }
+    if (!done) { ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, "end"); ta.dispatchEvent(new Event("input")); }
+  }
+  ide.open(opt.open || ide.files[0].id);
+  return ide;
+}
+
+/* ---- canvas charts ---- */
+const CHARTS = new Map();
+const Chart = {
+  colors() {
+    const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
+    return { fg: v("--fg"), muted: v("--muted"), line: v("--line"), surface: v("--surface"), bad: v("--bad"), s: [v("--s1"), v("--s2"), v("--s3"), v("--s4")], mono: "JetBrains Mono, ui-monospace, monospace" };
+  },
+  nice(lo, hi, count) {
+    const raw = (hi - lo) / count, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+    const min = Math.floor(lo / step + 1e-9) * step, max = Math.ceil(hi / step - 1e-9) * step, vals = [];
+    for (let v = min; v <= max + step / 2; v += step) vals.push(+v.toFixed(10));
+    return { min, max, vals };
+  },
+  axisFmt(v) { return Math.abs(v) >= 10000 ? (v / 1000).toFixed(0) + "k" : String(+v.toFixed(2)); },
+  draw(cv, spec) {
+    CHARTS.set(cv, spec); cv._spec = spec;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H) return;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    const C = this.colors(), n = spec.x.length;
+    g.font = "11px " + C.mono;
+    if (!n || !spec.series.length) {
+      g.fillStyle = C.muted; g.textAlign = "center"; g.fillText(spec.empty || "No rows in this range", W / 2, H / 2); cv._geo = null; return;
+    }
+    let lo = Infinity, hi = -Infinity;
+    for (const s of spec.series) for (const v of s.y) if (v != null && isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    if (spec.ref != null) { lo = Math.min(lo, spec.ref); hi = Math.max(hi, spec.ref); }
+    if (spec.kind === "bar") lo = Math.min(0, lo);
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (hi === lo) hi = lo + 1;
+    const T = this.nice(lo, hi, 4);
+    const padL = Math.max(34, Math.max(...T.vals.map(v => g.measureText(this.axisFmt(v)).width)) + 12), L = padL, R = W - 12, Tp = 10, B = H - 22;
+    const yPx = v => B - (v - T.min) / (T.max - T.min) * (B - Tp);
+    // x scale
+    const bar = spec.kind === "bar";
+    let xPx, xTicks = [];
+    if (spec.xTime) {
+      let d = Infinity; for (let i = 1; i < n; i++) if (spec.x[i] > spec.x[i - 1]) d = Math.min(d, spec.x[i] - spec.x[i - 1]);
+      if (!isFinite(d)) d = 1000;
+      const x0 = spec.x[0] - (bar ? d / 2 : 0), x1 = spec.x[n - 1] + (bar ? d / 2 : 0) || x0 + 1;
+      const span = Math.max(x1 - x0, 1);
+      xPx = x => L + (x - x0) / span * (R - L);
+      const steps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14400].map(s => s * 1000);
+      const step = steps.find(s => span / s <= Math.max(2, (R - L) / 74)) || steps[steps.length - 1];
+      for (let t = Math.ceil(x0 / step) * step; t <= x1; t += step) xTicks.push({ x: xPx(t), label: step < 60000 ? hms(t) : hms(t).slice(0, 5) });
+      cv._bw = bar ? Math.max(2, d / span * (R - L) * 0.78) : 0;
+    } else {
+      const slot = (R - L) / n;
+      xPx = i => bar ? L + (i + 0.5) * slot : L + (n === 1 ? 0.5 : i / (n - 1)) * (R - L);
+      const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((R - L) / 54))));
+      for (let i = 0; i < n; i += every) xTicks.push({ x: xPx(i), label: String(spec.xLabels ? spec.xLabels[i] : spec.x[i]) });
+      cv._bw = bar ? Math.max(2, slot * 0.7) : 0;
+    }
+    const px = i => spec.xTime ? xPx(spec.x[i]) : xPx(i);
+    // grid + axes
+    g.lineWidth = 1; g.textBaseline = "middle"; g.textAlign = "right";
+    for (const v of T.vals) {
+      const y = Math.round(yPx(v)) + 0.5;
+      g.strokeStyle = C.line; g.globalAlpha = v === T.min ? 1 : 0.55; g.beginPath(); g.moveTo(L, y); g.lineTo(R, y); g.stroke(); g.globalAlpha = 1;
+      g.fillStyle = C.muted; g.fillText(this.axisFmt(v), L - 6, y);
+    }
+    g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = C.muted;
+    for (const t of xTicks) g.fillText(t.label, Math.min(Math.max(t.x, L + 14), R - 14), B + 6);
+    // reference line
+    if (spec.ref != null) {
+      const y = Math.round(yPx(spec.ref)) + 0.5;
+      g.strokeStyle = C.bad; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(L, y); g.lineTo(R, y); g.stroke(); g.setLineDash([]);
+      if (spec.refLabel) { g.fillStyle = C.bad; g.textAlign = "right"; g.textBaseline = "bottom"; g.fillText(spec.refLabel, R, y - 3); }
+    }
+    // series
+    const m = spec.series.length;
+    spec.series.forEach((s, si) => {
+      const col = C.s[(s.color != null ? s.color : si) % 4];
+      if (bar) {
+        g.fillStyle = col; g.globalAlpha = 0.88;
+        const bw = cv._bw / m;
+        s.y.forEach((v, i) => { if (v == null) return; const x = px(i) - cv._bw / 2 + si * bw, y = yPx(v), y0 = yPx(0); g.fillRect(x, Math.min(y, y0), Math.max(1, bw - 1), Math.max(1, Math.abs(y0 - y))); });
+        g.globalAlpha = 1; return;
+      }
+      const gaps = []; for (let i = 1; i < n; i++) gaps.push(spec.x[i] - spec.x[i - 1]);
+      const med = gaps.length ? gaps.slice().sort((a, b) => a - b)[gaps.length >> 1] : 0;
+      const brk = i => spec.xTime && med > 0 && i > 0 && spec.x[i] - spec.x[i - 1] > med * 4;
+      const path = new Path2D(); let pen = false, lastI = -1;
+      s.y.forEach((v, i) => { if (v == null || !isFinite(v)) { pen = false; return; } if (!pen || brk(i)) path.moveTo(px(i), yPx(v)); else path.lineTo(px(i), yPx(v)); pen = true; lastI = i; });
+      if (spec.area && si === 0) {
+        const grad = g.createLinearGradient(0, Tp, 0, B); grad.addColorStop(0, col + "55"); grad.addColorStop(1, col + "05");
+        const fill = new Path2D(); let open = false, sx = 0;
+        s.y.forEach((v, i) => { if (v == null) return; if (!open || brk(i)) { if (open) { fill.lineTo(sx, B); fill.closePath(); } fill.moveTo(px(i), B); fill.lineTo(px(i), yPx(v)); open = true; } else fill.lineTo(px(i), yPx(v)); sx = px(i); });
+        if (open) { fill.lineTo(sx, B); fill.closePath(); } g.fillStyle = grad; g.fill(fill);
+      }
+      g.strokeStyle = col; g.lineWidth = 1.8; g.lineJoin = "round"; g.setLineDash(s.dash ? [5, 4] : []); g.stroke(path); g.setLineDash([]);
+      if (lastI >= 0 && !s.dash) { g.fillStyle = C.surface; g.beginPath(); g.arc(px(lastI), yPx(s.y[lastI]), 5, 0, 7); g.fill(); g.fillStyle = col; g.beginPath(); g.arc(px(lastI), yPx(s.y[lastI]), 3.2, 0, 7); g.fill(); }
+    });
+    // hover
+    cv._geo = { px: Array.from({ length: n }, (_, i) => px(i)), L, R, yPx, C, B };
+    const hv = cv._hover;
+    if (hv != null && hv < n) {
+      const x = cv._geo.px[hv];
+      g.strokeStyle = C.muted; g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(Math.round(x) + 0.5, Tp); g.lineTo(Math.round(x) + 0.5, B); g.stroke(); g.setLineDash([]);
+      if (!bar) spec.series.forEach((s, si) => { const v = s.y[hv]; if (v == null) return; g.fillStyle = C.s[(s.color != null ? s.color : si) % 4]; g.beginPath(); g.arc(x, yPx(v), 3.5, 0, 7); g.fill(); });
+    }
+  },
+  redrawAll() { CHARTS.forEach((spec, cv) => { if (cv.isConnected) this.draw(cv, spec); }); },
+  attach(cv) {
+    if (cv._att) return; cv._att = true;
+    const tip = cv.parentNode.querySelector(".tip");
+    const move = e => {
+      const geo = cv._geo, spec = cv._spec; if (!geo || !spec) return;
+      const r = cv.getBoundingClientRect(), x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+      let best = 0, bd = Infinity; geo.px.forEach((p, i) => { const d = Math.abs(p - x); if (d < bd) { bd = d; best = i; } });
+      cv._hover = best; Chart.draw(cv, spec);
+      const hd = spec.xTime ? hms(spec.x[best]) : String(spec.xLabels ? spec.xLabels[best] : spec.x[best]);
+      tip.innerHTML = "<b>" + esc(hd) + "</b>" + spec.series.map((s, si) => '<div><span style="color:' + geo.C.s[(s.color != null ? s.color : si) % 4] + '">●</span> ' + esc(s.name) + " " + (s.y[best] == null ? "-" : +(+s.y[best]).toFixed(2)) + "</div>").join("");
+      tip.style.display = "block";
+      tip.style.left = Math.min(Math.max(geo.px[best] + 12, 4), r.width - tip.offsetWidth - 4) + "px"; tip.style.top = "8px";
+    };
+    const leave = () => { cv._hover = null; tip.style.display = "none"; if (cv._spec) Chart.draw(cv, cv._spec); };
+    cv.addEventListener("mousemove", move); cv.addEventListener("touchmove", move, { passive: true });
+    cv.addEventListener("mouseleave", leave); cv.addEventListener("touchend", leave);
+  },
+  legend(series) {
+    return series.map((s, i) => '<span style="--c:var(--s' + (((s.color != null ? s.color : i) % 4) + 1) + ')"><i' + (s.dash ? ' class="dash"' : "") + "></i>" + esc(s.name) + "</span>").join("");
+  }
+};
+new ResizeObserver(() => Chart.redrawAll()).observe(document.body);
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => setTimeout(() => Chart.redrawAll(), 50)); } catch (e) { /* older browsers */ }
+new MutationObserver(() => setTimeout(() => Chart.redrawAll(), 50)).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+/* turn a SQL result into a chart spec */
+function resultToChart(res, opt = {}) {
+  const cols = res.columns, rows = res.rows;
+  if (!rows.length || cols.length < 2) return null;
+  const numeric = [];
+  for (let c = 1; c < cols.length; c++) if (rows.every(r => r[c] == null || typeof r[c] === "number")) numeric.push(c);
+  if (!numeric.length) return null;
+  const colorOf = { angle: 0, avg_ma: 0, mean: 0, samples: 0, msgs: 0, setpoint: 1, peak: 1, peak_ma: 1, target: 3 };
+  const series = numeric.slice(0, 4).map((c, i) => ({ name: cols[c].name, y: rows.map(r => r[c]), color: colorOf[cols[c].name] != null ? colorOf[cols[c].name] : i, dash: cols[c].name === "target" }));
+  const spec = { kind: opt.kind || (cols[0].time && !opt.bar ? "line" : "bar"), xTime: !!cols[0].time, x: rows.map(r => r[0]), series, ref: opt.ref, refLabel: opt.refLabel, area: opt.area };
+  if (!cols[0].time) spec.xLabels = rows.map(r => r[0]);
+  return spec;
+}
+/* ============ Visuals: data-path diagram, hardware picture, gauge ============ */
+const SVGNS = "http://www.w3.org/2000/svg";
+
+/* ---- data-path diagram with animated packets ---- */
+const DG = {
+  W: 120, Y: 30, H: 78,
+  boxes: [
+    { id: "esp", x: 10, title: "ESP32", sub: "servo firmware", hue: "--h-esp" },
+    { id: "mq", x: 215, title: "Mosquitto", sub: "broker :1883", hue: "--h-mqtt" },
+    { id: "nr", x: 420, title: "Node-RED", sub: "backend flow", hue: "--h-nr" },
+    { id: "db", x: 625, title: "InfluxDB", sub: "servo_lab", hue: "--h-influx" },
+    { id: "ui", x: 830, title: "Dashboard", sub: "SQL + controls", hue: "--h-dash" }
+  ],
+  edges: {
+    e1: { pts: [[130, 69], [215, 69]], color: "--h-esp", label: "state 5 Hz" },
+    e2: { pts: [[335, 69], [420, 69]], color: "--h-mqtt", label: "subscribe" },
+    e3: { pts: [[540, 69], [625, 69]], color: "--h-nr", label: "write" },
+    e4: { pts: [[745, 69], [830, 69]], color: "--h-influx", label: "SQL" },
+    fb: { pts: [[275, 108], [275, 142], [860, 142], [860, 108]], color: "--s3", label: "feedback: servo/+/state, status, alert" },
+    cmd: { pts: [[900, 108], [900, 178], [70, 178], [70, 108]], color: "--accent", label: "commands: servo/esp32-01/cmd" }
+  }
+};
+
+function dgBuild() {
+  let s = '<svg viewBox="0 0 960 215" role="img" aria-label="Data path from ESP32 through Mosquitto and Node-RED to InfluxDB and the dashboard, with a command path back">';
+  s += '<defs><marker id="dgArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" style="fill:var(--muted)"/></marker></defs>';
+  for (const [k, e] of Object.entries(DG.edges)) {
+    const d = e.pts.map((p, i) => (i ? "L" : "M") + p[0] + " " + p[1]).join(" ");
+    s += '<path class="dg-wire" d="' + d + '" marker-end="url(#dgArrow)" ' + (k === "cmd" || k === "fb" ? 'stroke-dasharray="5 4"' : "") + "/>";
+  }
+  s += '<text class="dg-m" x="172" y="58" text-anchor="middle">state 5 Hz</text><text class="dg-m" x="377" y="58" text-anchor="middle">subscribe</text><text class="dg-m" x="582" y="58" text-anchor="middle">write</text><text class="dg-m" x="787" y="58" text-anchor="middle">SQL</text>';
+  s += '<text class="dg-m" x="570" y="136" text-anchor="middle">feedback: servo/+/state, status, alert</text>';
+  s += '<text class="dg-m" x="485" y="195" text-anchor="middle">commands: servo/esp32-01/cmd (published to the broker, delivered to the ESP32)</text>';
+  for (const b of DG.boxes) {
+    s += '<g><rect class="dg-box" x="' + b.x + '" y="' + DG.Y + '" width="' + DG.W + '" height="' + DG.H + '" rx="8"/>';
+    s += '<rect x="' + b.x + '" y="' + DG.Y + '" width="' + DG.W + '" height="5" rx="2" style="fill:var(' + b.hue + ')"/>';
+    s += '<circle id="dgdot-' + b.id + '" cx="' + (b.x + DG.W - 12) + '" cy="' + (DG.Y + 20) + '" r="4.5" style="fill:var(--ok)"/>';
+    s += '<text class="dg-t" x="' + (b.x + 10) + '" y="' + (DG.Y + 26) + '">' + b.title + "</text>";
+    s += '<text class="dg-s" x="' + (b.x + 10) + '" y="' + (DG.Y + 43) + '">' + b.sub + "</text>";
+    s += '<text class="dg-n" id="dgs-' + b.id + '" x="' + (b.x + 10) + '" y="' + (DG.Y + 65) + '">-</text></g>';
+  }
+  s += '<g id="dgPk"></g></svg>';
+  $("#diagram").innerHTML = s;
+}
+
+const PK = { live: [], free: [] };
+function polyLen(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return L; }
+function polyAt(pts, u) {
+  let L = polyLen(pts) * u;
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    if (L <= seg || i === pts.length - 1) { const t = seg ? Math.min(1, L / seg) : 1; return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t]; }
+    L -= seg;
+  }
+  return pts[pts.length - 1];
+}
+function spawnPacket(edge) {
+  if (UI.tab !== "lab" || document.hidden || PK.live.length > 45) return;
+  const e = DG.edges[edge], host = $("#dgPk"); if (!host) return;
+  let el = PK.free.pop();
+  if (!el) { el = document.createElementNS(SVGNS, "circle"); el.setAttribute("r", "4"); }
+  el.style.fill = "var(" + e.color + ")"; host.appendChild(el);
+  PK.live.push({ el, pts: e.pts, t0: performance.now(), dur: edge === "cmd" || edge === "fb" ? 1500 : 650 });
+}
+function packetsTick(now) {
+  for (let i = PK.live.length - 1; i >= 0; i--) {
+    const p = PK.live[i], u = (now - p.t0) / p.dur;
+    if (u >= 1) { p.el.remove(); PK.free.push(p.el); PK.live.splice(i, 1); continue; }
+    const [x, y] = polyAt(p.pts, u);
+    p.el.setAttribute("cx", x.toFixed(1)); p.el.setAttribute("cy", y.toFixed(1));
+  }
+}
+function dgUpdate() {
+  const set = (id, t) => { const el = $("#dgs-" + id); if (el && el.textContent !== t) el.textContent = t; };
+  const dot = (id, st) => { const el = $("#dgdot-" + id); if (el) el.style.fill = "var(" + (st === "ok" ? "--ok" : st === "warn" ? "--warn" : "--bad") + ")"; };
+  set("esp", SERVO.theta.toFixed(1) + "° " + Math.round(SERVO.current) + " mA");
+  set("mq", BROKER.rate().toFixed(1) + " msg/s");
+  set("nr", NR.byId.out_servo.count + " points");
+  set("db", INFLUX.count() + " rows");
+  set("ui", FB.last ? "angle " + FB.last.angle.toFixed(1) + "°" : "waiting");
+  dot("esp", ESP.state === "crashed" ? "bad" : ESP.mq.connected && ESP.wifiOk() ? "ok" : "warn");
+  dot("nr", NR.nodes.some(n => n.err) ? "bad" : "ok");
+  dot("ui", FB.online === false ? "bad" : (SIM.now - FB.t > 1500 ? "warn" : "ok"));
+}
+
+/* ---- hardware picture ---- */
+function hwBuild() {
+  let ticks = "", labels = "";
+  for (let a = 0; a <= 180; a += 15) {
+    const major = a % 45 === 0, r1 = major ? 91 : 98, r2 = 105, c = Math.cos(a * Math.PI / 180), sn = Math.sin(a * Math.PI / 180);
+    ticks += '<line x1="' + (500 - r1 * c).toFixed(1) + '" y1="' + (200 - r1 * sn).toFixed(1) + '" x2="' + (500 - r2 * c).toFixed(1) + '" y2="' + (200 - r2 * sn).toFixed(1) + '" stroke="#7e8d89" stroke-width="' + (major ? 1.6 : 1) + '"/>';
+    if (major) labels += '<text class="hwm" x="' + (500 - 118 * c).toFixed(1) + '" y="' + (203 - 118 * sn).toFixed(1) + '" text-anchor="middle">' + a + "°</text>";
+  }
+  const pinsL = Array.from({ length: 12 }, (_, i) => '<circle cx="30" cy="' + (195 + i * 15) + '" r="2.6" fill="#d9b44a"/>').join("");
+  const pinsR = [[195, "D34"], [220, "D18"], [245, "D21"], [270, "D22"], [305, "GND"]].map(([y, t]) => '<circle cx="150" cy="' + y + '" r="2.8" fill="#e5c158"/><text class="hwp" x="141" y="' + (y + 2.6) + '" text-anchor="end">' + t + "</text>").join("");
+  const extra = Array.from({ length: 4 }, (_, i) => '<circle cx="150" cy="' + (330 + i * 12) + '" r="2.6" fill="#d9b44a"/>').join("");
+  const ant = "M48 62h12v10h12V62h12v10h12V62h12v10h12V62h12";
+  /* cardboard dial behind the needle: brightness scale, DIM at 0 degrees, LIGHT at 180 */
+  let cbTicks = "", cbLabels = "", rays = "";
+  for (let a = 0; a <= 180; a += 15) {
+    const c = Math.cos(a * Math.PI / 180), sn = Math.sin(a * Math.PI / 180);
+    cbTicks += '<line x1="' + (500 - 121 * c).toFixed(1) + '" y1="' + (200 - 121 * sn).toFixed(1) + '" x2="' + (500 - 135 * c).toFixed(1) + '" y2="' + (200 - 135 * sn).toFixed(1) + '" stroke="#3b3225" stroke-opacity=".55" stroke-width="1"/>';
+    if (a % 45 === 0) cbLabels += '<text class="hwm" x="' + (500 - 146 * c).toFixed(1) + '" y="' + (203 - 146 * sn).toFixed(1) + '" text-anchor="middle" style="fill:#4a3a22">' + (a / 180 * 100) + "%</text>";
+  }
+  for (let k = 0; k < 8; k++) { const t = k * Math.PI / 4; rays += '<line x1="' + (636 + 6 * Math.cos(t)).toFixed(1) + '" y1="' + (230 + 6 * Math.sin(t)).toFixed(1) + '" x2="' + (636 + 8.5 * Math.cos(t)).toFixed(1) + '" y2="' + (230 + 8.5 * Math.sin(t)).toFixed(1) + '"/>'; }
+  const dialFont = "font:700 12px 'Barlow Semi Condensed','Arial Narrow',sans-serif;fill:#3a2d17;letter-spacing:.12em";
+  const cardboard = '<rect x="340" y="30" width="320" height="272" rx="10" fill="#c9a468" stroke="#8f6f3c" stroke-width="2"/><rect x="340" y="30" width="320" height="272" rx="10" fill="url(#hwcor)"/>' +
+    '<rect x="330" y="22" width="46" height="14" fill="#fff4be" fill-opacity=".72" transform="rotate(-24 353 29)"/><rect x="624" y="22" width="46" height="14" fill="#fff4be" fill-opacity=".72" transform="rotate(24 647 29)"/>' +
+    '<text class="hwcap" id="hwDialT" x="500" y="47" text-anchor="middle" style="fill:#5a4524">Brightness dial</text>' +
+    '<path d="M372 200 A128 128 0 0 1 628 200" fill="none" stroke="url(#hwband)" stroke-width="14"/>' + cbTicks + cbLabels +
+    '<text x="358" y="219" text-anchor="middle" style="' + dialFont + '">DIM</text><circle cx="358" cy="230" r="3.8" fill="#3a3d45"/>' +
+    '<g fill="#e8a800" stroke="#e8a800" stroke-width="1.4" stroke-linecap="round"><circle cx="636" cy="230" r="3.8" stroke="none"/>' + rays + '</g><text x="654" y="219" text-anchor="end" style="' + dialFont + '">LIGHT</text>';
+  const s = '<svg viewBox="0 0 680 420" role="img" aria-label="Bench wiring: ESP32 DevKit, hobby servo with protractor, INA219 current sensor and 5 volt supply">' +
+    '<defs><pattern id="hwdots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#c3cdca"/></pattern>' +
+    '<linearGradient id="hwpcb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a3b42"/><stop offset="1" stop-color="#17232a"/></linearGradient>' +
+    '<linearGradient id="hwchip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e4e8ea"/><stop offset="1" stop-color="#b3bbbf"/></linearGradient>' +
+    '<linearGradient id="hwservo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b7fcb"/><stop offset="1" stop-color="#245a9a"/></linearGradient>' +
+    '<linearGradient id="hwband" gradientUnits="userSpaceOnUse" x1="372" y1="0" x2="628" y2="0"><stop offset="0" stop-color="#3a3d45"/><stop offset=".35" stop-color="#6b6a62"/><stop offset=".65" stop-color="#d4b45a"/><stop offset="1" stop-color="#ffe680"/></linearGradient>' +
+    '<pattern id="hwcor" width="7" height="7" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="7" stroke="#7a5426" stroke-opacity=".16" stroke-width="2"/></pattern></defs>' +
+    '<rect width="680" height="420" fill="#e6ece9"/><rect width="680" height="420" fill="url(#hwdots)"/>' +
+    cardboard +
+    /* wires */
+    '<g fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M160 195 H380 V238 H425" stroke="#2f9e5b"/>' +
+    '<path d="M160 220 H230 V312 H500 V276" stroke="#e8812a"/>' +
+    '<path d="M160 245 H215 V350 H330" stroke="#2f6fd6"/>' +
+    '<path d="M160 270 H200 V365 H330" stroke="#e2b516"/>' +
+    '<path d="M160 305 H185 V402 H575 V395" stroke="#20282a"/>' +
+    '<path d="M470 360 H420" stroke="#d23b3b"/><path d="M400 335 V292 H470 V276" stroke="#d23b3b"/>' +
+    '<path d="M530 335 V276" stroke="#7b4a2d"/></g>' +
+    '<text class="hwl" x="238" y="306">GPIO18 PWM, 50 Hz</text><text class="hwl" x="334" y="190" text-anchor="end">feedback wiper</text><text class="hwl" x="300" y="415" text-anchor="middle">common GND</text>' +
+    /* ESP32 */
+    '<g id="hwWifi" fill="none" stroke="#2a8f6a" stroke-width="2.6" stroke-linecap="round"><path d="M76 24a20 20 0 0 1 28 0"/><path d="M81 30a13 13 0 0 1 18 0"/><circle cx="90" cy="36" r="2" fill="#2a8f6a" stroke="none"/></g>' +
+    '<rect x="20" y="42" width="140" height="338" rx="8" fill="url(#hwpcb)" stroke="#0e171b" stroke-width="2"/>' +
+    '<rect x="38" y="54" width="104" height="116" rx="3" fill="url(#hwchip)" stroke="#8a9599"/>' +
+    '<path d="' + ant + '" fill="none" stroke="#c9a23a" stroke-width="2"/><line x1="38" y1="84" x2="142" y2="84" stroke="#8a9599"/>' +
+    '<text class="hwm" x="90" y="122" text-anchor="middle" style="font-size:12px">ESP32</text><text class="hwm" x="90" y="136" text-anchor="middle">WROOM-32</text>' +
+    pinsL + pinsR + extra +
+    '<rect x="70" y="366" width="40" height="16" rx="2" fill="#9aa5a8" stroke="#5c676a"/><rect x="40" y="346" width="16" height="12" rx="2" fill="#cfd5d6"/><rect x="124" y="346" width="16" height="12" rx="2" fill="#cfd5d6"/>' +
+    '<text class="hwp" x="48" y="342" text-anchor="middle">EN</text><text class="hwp" x="132" y="342" text-anchor="middle">BOOT</text>' +
+    '<circle cx="90" cy="320" r="9" id="hwLed" fill="#ff5a3c" opacity="0"/><circle cx="90" cy="320" r="3.6" fill="#6a2a22"/><text class="hwp" x="90" y="338" text-anchor="middle">GPIO2</text>' +
+    '<text class="hwcap" x="90" y="397" text-anchor="middle">ESP32 DevKit</text>' +
+    /* servo */
+    '<rect x="425" y="200" width="150" height="76" rx="6" fill="url(#hwservo)" stroke="#173f6c" stroke-width="1.5"/>' +
+    '<rect x="408" y="236" width="17" height="16" rx="2" fill="#2b66aa" stroke="#173f6c"/><rect x="575" y="236" width="17" height="16" rx="2" fill="#2b66aa" stroke="#173f6c"/>' +
+    '<circle cx="416" cy="244" r="3" fill="#e6ece9"/><circle cx="584" cy="244" r="3" fill="#e6ece9"/>' +
+    '<text x="500" y="256" text-anchor="middle" style="font:700 13px \'Barlow Semi Condensed\',\'Arial Narrow\',sans-serif;fill:#dce9f8;letter-spacing:.14em">SERVO</text>' +
+    '<path d="M395 200 A105 105 0 0 1 605 200 Z" fill="#f5f8f7" stroke="#8f9e9a" stroke-width="1.2"/>' + ticks + labels +
+    '<g id="hwGhost"><line x1="500" y1="200" x2="400" y2="200" stroke="#c2410c" stroke-width="2.4" stroke-dasharray="5 4"/><circle cx="400" cy="200" r="3.5" fill="#c2410c"/></g>' +
+    '<g id="hwHorn"><path d="M500 191 L430 195 Q417 200 430 205 L500 209 Z" fill="#f3efe4" stroke="#8a8272" stroke-width="1.2"/><circle cx="434" cy="200" r="2.2" fill="#8a8272"/><circle cx="450" cy="200" r="2.2" fill="#8a8272"/><circle id="hwLoad" cx="414" cy="200" r="0" fill="#56616b" stroke="#2e363c" stroke-width="1.5"/></g>' +
+    '<circle cx="500" cy="200" r="14" fill="#dbe1e2" stroke="#7a8588" stroke-width="1.5"/><circle cx="500" cy="200" r="4.5" fill="#6d777a"/>' +
+    /* INA219 and supply */
+    '<rect x="330" y="335" width="90" height="50" rx="4" fill="#1f5f7a" stroke="#123a4b" stroke-width="1.5"/><rect x="372" y="346" width="26" height="9" rx="1" fill="#20282a"/>' +
+    '<circle cx="400" cy="335" r="3.2" fill="#d9b44a"/><circle cx="420" cy="360" r="3.2" fill="#d9b44a"/><circle cx="330" cy="350" r="3.2" fill="#d9b44a"/><circle cx="330" cy="365" r="3.2" fill="#d9b44a"/>' +
+    '<text class="hwp" x="343" y="378" style="font-size:8px">INA219 SENSE</text>' +
+    
+    '<rect x="470" y="335" width="150" height="60" rx="5" fill="#3a4650" stroke="#232c33" stroke-width="1.5"/>' +
+    '<circle cx="470" cy="360" r="5" fill="#d23b3b"/><circle cx="530" cy="335" r="5" fill="#7b4a2d"/>' +
+    '<text x="545" y="368" text-anchor="middle" style="font:700 17px \'Barlow Semi Condensed\',\'Arial Narrow\',sans-serif;fill:#e6ecef">5 V · 2 A</text>' +
+    '<text x="545" y="386" text-anchor="middle" style="font:600 10px \'Barlow Semi Condensed\',\'Arial Narrow\',sans-serif;fill:#aebbc2;letter-spacing:.12em">SERVO SUPPLY</text>' +
+    /* readout */
+    '<text class="hwcap" x="196" y="38">Shaft angle</text><text class="hwbig" id="hwAng" x="196" y="68">90.0°</text>' +
+    '<text class="hwsub" id="hwSub" x="196" y="86">set 90.0° · 12 mA</text><text class="hwsub" id="hwBr" x="196" y="104"></text>' +
+    "</svg>";
+  $("#hw").innerHTML = s;
+}
+function hwUpdate() {
+  const a = SERVO.theta, sp = FB.last ? FB.last.setpoint : a;
+  $("#hwHorn").setAttribute("transform", "rotate(" + a.toFixed(2) + " 500 200)");
+  $("#hwGhost").setAttribute("transform", "rotate(" + clamp(sp, 0, 180).toFixed(2) + " 500 200)");
+  $("#hwLoad").setAttribute("r", (SERVO.load * 16).toFixed(1));
+  $("#hwLed").setAttribute("opacity", ESP.led ? "0.95" : "0");
+  const up = ESP.wifiOk();
+  $("#hwWifi").style.opacity = up ? "1" : "0.55";
+  $("#hwWifi").setAttribute("stroke", up ? "#2a8f6a" : "#cf3434");
+  $("#hwAng").textContent = a.toFixed(1) + "°";
+  $("#hwSub").textContent = "set " + sp.toFixed(1) + "° · " + Math.round(SERVO.current) + " mA";
+  $("#hwBr").textContent = "dial: " + Math.round(a / 180 * 100) + " % brightness";
+  $("#hwDialT").textContent = "Brightness dial \u00B7 live";
+  hw2Update();
+  const arm = $("#brandArm"); if (arm) arm.setAttribute("transform", "rotate(" + (a - 90).toFixed(1) + " 21 29)");
+}
+
+/* ---- semicircle gauge for the dashboard ---- */
+function gaugeSvg(angle, setpoint) {
+  const cx = 150, cy = 140, r = 105;
+  const pt = (a, rr) => [cx - rr * Math.cos(a * Math.PI / 180), cy - rr * Math.sin(a * Math.PI / 180)];
+  const a = clamp(angle, 0, 180);
+  const [x, y] = pt(Math.max(a, 0.01), r), [sx1, sy1] = pt(clamp(setpoint, 0, 180), r - 12), [sx2, sy2] = pt(clamp(setpoint, 0, 180), r + 12);
+  let t = "";
+  for (const k of [0, 90, 180]) { const [tx, ty] = pt(k, r + 20); t += '<text class="g-tick" x="' + tx.toFixed(1) + '" y="' + (ty + 4).toFixed(1) + '" text-anchor="middle">' + k + "°</text>"; }
+  return '<svg viewBox="0 0 300 170" role="img" aria-label="Shaft angle ' + a.toFixed(1) + ' degrees">' +
+    '<path d="M' + (cx - r) + " " + cy + " A" + r + " " + r + ' 0 0 1 ' + (cx + r) + " " + cy + '" fill="none" style="stroke:var(--line)" stroke-width="14" stroke-linecap="round"/>' +
+    '<path d="M' + (cx - r) + " " + cy + " A" + r + " " + r + " 0 0 1 " + x.toFixed(1) + " " + y.toFixed(1) + '" fill="none" style="stroke:var(--s1)" stroke-width="14" stroke-linecap="round"/>' +
+    '<line x1="' + sx1.toFixed(1) + '" y1="' + sy1.toFixed(1) + '" x2="' + sx2.toFixed(1) + '" y2="' + sy2.toFixed(1) + '" style="stroke:var(--s2)" stroke-width="3" stroke-linecap="round"/>' + t +
+    '<text class="g-val" x="150" y="128" text-anchor="middle">' + a.toFixed(1) + '°</text><text class="g-sub" x="150" y="150" text-anchor="middle">setpoint ' + setpoint.toFixed(1) + "°</text></svg>";
+}
+/* ============ Lamp and LDR rig picture ============ */
+const mixHex = (a, b, t) => {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), x = p(a), y = p(b);
+  return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("");
+};
+
+function hw2Build() {
+  const s = '<svg viewBox="0 0 680 240" role="img" aria-label="Lamp and LDR rig: the ESP32 dims the lamp through a MOSFET and reads the LDR on GPIO32">' +
+    '<defs><pattern id="hw2dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#c3cdca"/></pattern>' +
+    '<linearGradient id="hw2pcb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a3b42"/><stop offset="1" stop-color="#17232a"/></linearGradient>' +
+    '<radialGradient id="hw2halo"><stop offset="0" stop-color="#ffe9a0" stop-opacity="1"/><stop offset="1" stop-color="#ffe9a0" stop-opacity="0"/></radialGradient>' +
+    '<linearGradient id="hw2cone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe27a" stop-opacity=".85"/><stop offset="1" stop-color="#ffe27a" stop-opacity=".12"/></linearGradient>' +
+    '<linearGradient id="hw2band" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3a3d45"/><stop offset=".35" stop-color="#6b6a62"/><stop offset=".65" stop-color="#d4b45a"/><stop offset="1" stop-color="#ffe680"/></linearGradient></defs>' +
+    '<rect width="680" height="240" fill="#e6ece9"/><rect width="680" height="240" fill="url(#hw2dots)"/>' +
+    /* wires */
+    '<g fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M120 70 H210" stroke="#e8812a"/>' +
+    '<path d="M300 82 H400 V104 H428" stroke="#d23b3b"/><path d="M255 45 V30" stroke="#d23b3b"/>' +
+    '<path d="M120 120 H350 V185 H380" stroke="#2f6fd6"/>' +
+    '<path d="M120 150 H335 V198 H380" stroke="#d23b3b"/>' +
+    '<path d="M120 180 H320 V211 H380" stroke="#20282a"/></g>' +
+    '<text class="hwl" x="128" y="63">PWM 5 kHz</text><text class="hwl" x="132" y="114">LDR signal</text><text class="hwl" x="266" y="26">5 V lamp supply</text>' +
+    /* ESP32 */
+    '<rect x="20" y="30" width="100" height="190" rx="8" fill="url(#hw2pcb)" stroke="#0e171b" stroke-width="2"/>' +
+    '<text class="hwp" x="70" y="56" text-anchor="middle" style="font-size:11px">ESP32</text>' +
+    [[70, "GPIO25"], [120, "GPIO32"], [150, "3V3"], [180, "GND"]].map(([y, t]) => '<circle cx="120" cy="' + y + '" r="3" fill="#e5c158"/><text class="hwp" x="112" y="' + (y + 2.6) + '" text-anchor="end">' + t + "</text>").join("") +
+    /* MOSFET */
+    '<rect x="210" y="45" width="90" height="70" rx="5" fill="#2b3138" stroke="#14181c" stroke-width="1.5"/>' +
+    '<text class="hwp" x="255" y="72" text-anchor="middle" style="font-size:9px">MOSFET</text><text class="hwp" x="255" y="86" text-anchor="middle" style="font-size:8px">logic level</text>' +
+    '<circle cx="210" cy="70" r="3" fill="#e5c158"/><circle cx="300" cy="82" r="3" fill="#e5c158"/><circle cx="255" cy="45" r="3" fill="#e5c158"/>' +
+    /* lamp, light cone and LDR */
+    '<polygon id="hw2Cone" points="420,92 460,92 500,176 380,176" fill="url(#hw2cone)" opacity="0"/>' +
+    '<circle id="hw2Halo" cx="440" cy="66" r="66" fill="url(#hw2halo)" opacity="0"/>' +
+    '<circle id="hw2Bulb" cx="440" cy="66" r="28" fill="#d5dadc" stroke="#8a949a" stroke-width="2"/>' +
+    '<path id="hw2Fil" d="M432 84 V72 Q440 50 448 72 V84" fill="none" stroke="#7d868a" stroke-width="2"/>' +
+    '<rect x="426" y="92" width="28" height="22" rx="3" fill="#8d969a" stroke="#5c676a"/><line x1="426" y1="99" x2="454" y2="99" stroke="#5c676a"/><line x1="426" y1="106" x2="454" y2="106" stroke="#5c676a"/>' +
+    '<text class="hwcap" x="440" y="20" text-anchor="middle">Lamp</text>' +
+    '<rect x="380" y="176" width="120" height="52" rx="4" fill="#2f7d52" stroke="#1c4d32" stroke-width="1.5"/>' +
+    [[185, "OUT"], [198, "3V3"], [211, "GND"]].map(([y, t]) => '<circle cx="380" cy="' + y + '" r="3" fill="#e5c158"/><text class="hwp" x="387" y="' + (y + 2.4) + '" style="font-size:7px">' + t + "</text>").join("") +
+    '<circle cx="438" cy="200" r="15" fill="#c7a063" stroke="#7a5a2a" stroke-width="1.5"/>' +
+    '<path d="M427 194 q4 -4 5.5 0 t5.5 0 t5.5 0 M427 200 q4 -4 5.5 0 t5.5 0 t5.5 0 M427 206 q4 -4 5.5 0 t5.5 0 t5.5 0" fill="none" stroke="#5b4120" stroke-width="1.4"/>' +
+    '<rect x="466" y="195" width="28" height="10" rx="2" fill="#d9c38a" stroke="#8d7a46"/><rect x="472" y="195" width="3" height="10" fill="#7b4a2d"/><rect x="478" y="195" width="3" height="10" fill="#20282a"/><rect x="484" y="195" width="3" height="10" fill="#e8812a"/>' +
+    '<text class="hwp" x="438" y="224" text-anchor="middle" style="font-size:7px">LDR</text><text class="hwp" x="480" y="224" text-anchor="middle" style="font-size:7px">10 k</text>' +
+    /* readouts */
+    '<text class="hwcap" x="530" y="38">Lamp duty</text><text class="hwbig" id="hw2Lamp" x="530" y="68">35%</text>' +
+    '<text class="hwcap" x="530" y="96">LDR reads</text><text class="hwsub" id="hw2Ldr" x="530" y="114">0 ADC · 0 lux</text>' +
+    '<text class="hwcap" x="530" y="146">Brightness</text><text class="hwsub" id="hw2Br" x="660" y="146" text-anchor="end">0 %</text>' +
+    '<rect x="530" y="154" width="130" height="12" rx="6" fill="url(#hw2band)" stroke="#8a949a"/>' +
+    '<polygon id="hw2Mark" points="525,180 535,180 530,171" fill="#26332f"/>' +
+    '<text class="hwm" x="530" y="196" style="font-size:8px">DIM</text><text class="hwm" x="660" y="196" text-anchor="end" style="font-size:8px">LIGHT</text>' +
+    '<text class="hwsub" id="hw2Servo" x="530" y="218">servo points to 0°</text>' +
+    "</svg>";
+  $("#hw2").innerHTML = s;
+}
+
+function hw2Update() {
+  const g = LAMP.glow, br = clamp(LAMP.lux / LAMP.maxLux, 0, 1), x = 530 + br * 130;
+  $("#hw2Halo").setAttribute("opacity", (g * 0.9).toFixed(2));
+  $("#hw2Cone").setAttribute("opacity", (g * 0.75).toFixed(2));
+  $("#hw2Bulb").setAttribute("fill", mixHex("#d5dadc", "#fff0a8", g));
+  $("#hw2Fil").setAttribute("stroke", mixHex("#7d868a", "#ffa800", g));
+  $("#hw2Lamp").textContent = Math.round(LAMP.duty * 100) + "%";
+  $("#hw2Ldr").textContent = Math.round(LAMP.adcClean()) + " ADC · " + Math.round(LAMP.lux) + " lux";
+  $("#hw2Br").textContent = Math.round(br * 100) + " %";
+  $("#hw2Mark").setAttribute("points", (x - 5).toFixed(1) + ",180 " + (x + 5).toFixed(1) + ",180 " + x.toFixed(1) + ",171");
+  $("#hw2Servo").textContent = "servo points to " + Math.round(br * 180) + "°";
+}
+/* ============ Views: wiring every tab to the simulation ============ */
+const UI = { tab: "lab", rangeText: "2 minutes", rangeSec: 120, sqlView: "chart", sqlRan: false, sqlRes: null, ides: {}, panels: {}, tiles: [], nrEls: {}, liveAt: 0 };
+const TABS = ["lab", "esp", "mqtt", "nr", "influx", "dash", "stack"];
+
+FILES.add = function (id, name, lang, def) {
+  const d = { id, name, lang, def, val: def };
+  try { const s = localStorage.getItem(this.key(id)); if (s != null) d.val = s; } catch (e) { /* storage blocked */ }
+  this.defs[id] = d;
+};
+const fmtNum = (v, d = 1) => (v == null || isNaN(v)) ? "--" : Number(v).toFixed(d);
+const clip = (s, n) => { s = String(s); return s.length > n ? s.slice(0, n) + "…" : s; };
+const ms3 = t => { const s = Math.max(0, t) / 1000; return pad2(Math.floor(s / 60)) + ":" + pad2(Math.floor(s % 60)) + "." + String(Math.floor(t % 1000)).padStart(3, "0"); };
+function thr(fn, ms) {
+  let last = 0, timer = null;
+  return (...a) => {
+    const now = performance.now();
+    if (now - last >= ms) { last = now; fn(...a); }
+    else { clearTimeout(timer); timer = setTimeout(() => { last = performance.now(); fn(...a); }, ms - (now - last)); }
+  };
+}
+function toast(title, text) {
+  const host = $("#toasts"); if (!host) return;
+  const el = document.createElement("div"); el.className = "toast";
+  el.innerHTML = "<b>" + esc(title) + "</b>" + esc(text);
+  host.appendChild(el);
+  while (host.children.length > 3) host.firstChild.remove();
+  setTimeout(() => el.remove(), 5500);
+}
+function setLog(el, html) {
+  const near = el.scrollTop + el.clientHeight >= el.scrollHeight - 10;
+  el.innerHTML = html;
+  if (near) el.scrollTop = el.scrollHeight;
+}
+function logLine(e) {
+  if (e.sys) return '<div class="sys"><span class="t">' + hms(e.t) + "</span> broker: " + esc(e.payload) + "</div>";
+  return '<div><span class="t">' + hms(e.t) + "." + String(Math.floor(e.t % 1000)).padStart(3, "0") + '</span> <span class="tp">' + esc(e.topic) + "</span> " + (e.retain ? '<span class="wr">R</span> ' : "") + esc(clip(e.payload, 110)) + "</div>";
+}
+
+/* ---- tabs ---- */
+function showTab(id) {
+  if (!TABS.includes(id)) id = "lab";
+  UI.tab = id;
+  $$(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === id)));
+  $$(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + id));
+  slowUpdate();
+  if (id === "influx") runSql();
+  if (id === "dash") dashRefresh();
+  requestAnimationFrame(() => { Chart.redrawAll(); fastUpdate(); });
+}
+
+/* ---- lab ---- */
+function labInit() {
+  hwBuild(); hw2Build(); dgBuild();
+  const load = $("#load"), lamp = $("#lamp");
+  const sendLamp = thr(() => sendCmd({ lamp: +lamp.value }), 100);
+  lamp.oninput = () => { $("#lampV").textContent = lamp.value + "%"; sendLamp(); };
+  load.oninput = () => { SERVO.load = +load.value / 100; $("#loadV").textContent = load.value + "%"; };
+  $("#wifi").onchange = e => setWifi(e.target.checked);
+  $("#goMqtt").onclick = () => showTab("mqtt");
+  Chart.attach($("#fbChart"));
+}
+function labSlow() {
+  const m = FB.last, age = (SIM.now - FB.t) / 1000;
+  $("#fbAngle").innerHTML = m ? fmtNum(m.angle, 1) + "<small>°</small>" : "--";
+  $("#fbPhys").innerHTML = fmtNum(SERVO.theta, 1) + "<small>°</small>";
+  $("#fbSet").innerHTML = m ? fmtNum(m.setpoint, 1) + "<small>°</small>" : "--";
+  $("#fbCur").innerHTML = m ? Math.round(m.current) + "<small>mA</small>" : "--";
+  $("#fbTemp").innerHTML = m ? fmtNum(m.temp, 1) + "<small>°C</small>" : "--";
+  $("#fbLux").innerHTML = m && m.lux != null ? Math.round(m.lux) + "<small>lux</small>" : "--";
+  $("#fbLamp").innerHTML = m && m.lamp != null ? Math.round(m.lamp) + "<small>%</small>" : "--";
+  $("#fbAge").innerHTML = m ? fmtNum(age, 1) + "<small>s ago</small>" : "--";
+  const lampEl = $("#lamp");
+  if (m && m.lamp != null && document.activeElement !== lampEl) { lampEl.value = m.lamp; $("#lampV").textContent = Math.round(m.lamp) + "%"; }
+  const fl = $("#fbLink");
+  if (FB.online === false) { fl.className = "pill bad"; fl.textContent = "device offline"; }
+  else if (m && age > 1.5) { fl.className = "pill warn"; fl.textContent = "no data"; }
+  else { fl.className = "pill ok"; fl.textContent = "live"; }
+  const hl = $("#hwLink");
+  if (ESP.state === "crashed") { hl.className = "pill bad"; hl.textContent = "firmware crashed"; }
+  else if (!ESP.wifiOk()) { hl.className = "pill bad"; hl.textContent = "Wi-Fi down"; }
+  else if (!ESP.mq.connected) { hl.className = "pill warn"; hl.textContent = "MQTT connecting"; }
+  else { hl.className = "pill ok"; hl.textContent = "Wi-Fi + MQTT up"; }
+  $("#alertList").innerHTML = FB.alerts.length ? FB.alerts.slice(0, 12).map(a => '<div><span class="t">' + hms(a.t) + '</span> <span class="wr">' + esc(a.kind) + " " + esc(a.value) + "</span> " + esc(a.text || "") + "</div>").join("") : '<span class="sys">No alerts yet. Raise the load on the horn, then move the lamp a long way to trigger an overcurrent alert.</span>';
+  $("#trafficLog").innerHTML = BROKER.log.slice(-14).reverse().map(logLine).join("");
+  dgUpdate();
+}
+function labFast() {
+  const h = FB.hist;
+  Chart.draw($("#fbChart"), { kind: "line", xTime: true, x: h.map(p => p.t), series: [{ name: "reported angle", y: h.map(p => p.angle), color: 0 }, { name: "setpoint", y: h.map(p => p.setpoint), color: 1, dash: true }], empty: "Waiting for telemetry" });
+}
+
+/* ---- ESP32 ---- */
+function espInit() {
+  const flash = ide => {
+    if (ide.cur.id === "esp-ino") { ide.status("The C++ sketch is for a real board. Switch to firmware.sim.js to run it here.", "bad"); return; }
+    const ok = ESP.flash(FILES.get("esp-js"));
+    ide.status(ok ? "Flashed and running (" + hms(SIM.now) + ")" : ESP.err, ok ? "ok" : "bad");
+  };
+  UI.ides.esp = createIDE($("#ide-esp"), { files: [filesRef("esp-js"), filesRef("esp-ino")], hue: "var(--h-esp)", height: 540, actions: [{ label: "Flash & run", primary: true, onClick: flash }], onRun: flash });
+  $("#serialClear").onclick = () => { ESP.serial = []; espSlow(); };
+}
+function espSlow() {
+  setLog($("#serial"), ESP.serial.slice(-80).map(l => '<div><span class="t">[' + ms3(l.t) + "]</span> " + (/^Guru|^Halted|error/i.test(l.s) ? '<span class="err">' + esc(l.s) + "</span>" : esc(l.s)) + "</div>").join(""));
+}
+
+/* ---- MQTT ---- */
+function mqttInit() {
+  const apply = ide => {
+    const errs = BROKER.applyConfig(ide.cur.get());
+    ide.status(errs.length ? errs[0] : "Config applied. New latency affects the next messages.", errs.length ? "bad" : "ok");
+  };
+  UI.ides.mqtt = createIDE($("#ide-mqtt"), { files: [filesRef("mqtt-conf")], hue: "var(--h-mqtt)", height: 300, actions: [{ label: "Apply config", primary: true, onClick: apply }], onRun: apply });
+  $("#pubBtn").onclick = () => {
+    const t = $("#pubTopic").value.trim();
+    if (!t || /[+#]/.test(t)) { toast("Cannot publish", "Use a topic without + or # wildcards."); return; }
+    BROKER.publish("web-ui", t, $("#pubPayload").value, $("#pubRetain").checked);
+  };
+}
+function mqttSlow() {
+  const S = BROKER.stats, c = BROKER.cfg;
+  const kv = [["Clients", BROKER.clients.size], ["Retained", BROKER.retained.size], ["Published", S.pub], ["Delivered", S.del], ["Rate", BROKER.rate().toFixed(1) + " /s"], ["Latency", c.latency + "±" + c.jitter + " ms"], ["Traffic", (S.bytes / 1024).toFixed(1) + " KB"]];
+  $("#mqStats").innerHTML = kv.map(([k, v]) => "<div><span>" + k + "</span><b>" + v + "</b></div>").join("");
+  $("#clientTbl").innerHTML = [...BROKER.clients.values()].map(cl => "<tr><td>" + esc(cl.id) + '</td><td class="wrap">' + esc([...cl.subs].join(", ") || "-") + "</td><td>" + (cl.link ? '<span class="pill ok">up</span>' : '<span class="pill bad">lost, will in ' + Math.max(0, (cl.deadline - SIM.now) / 1000).toFixed(1) + " s</span>") + "</td></tr>").join("");
+  $("#topicTbl").innerHTML = [...BROKER.topics.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([t, v]) => "<tr><td>" + esc(t) + (v.retain ? ' <span class="wr">R</span>' : "") + "</td><td>" + v.n + '</td><td class="wrap">' + esc(clip(v.last, 64)) + "</td></tr>").join("");
+  let f = $("#logFilter").value.trim() || "#";
+  const rows = [];
+  for (let i = BROKER.log.length - 1; i >= 0 && rows.length < 60; i--) { const e = BROKER.log[i]; let ok = false; try { ok = topicMatch(f, e.topic); } catch (x) { ok = false; } if (ok) rows.push(logLine(e)); }
+  $("#msgLog").innerHTML = rows.join("") || '<span class="sys">No messages match this filter.</span>';
+}
+
+/* ---- Node-RED ---- */
+const NR_HUE = { "mqtt in": "--h-mqtt", "mqtt out": "--h-mqtt", json: "--warn", function: "--s2", "influxdb out": "--h-influx", debug: "--s3" };
+function nrBuild() {
+  let s = '<svg viewBox="0 0 960 345" role="img" aria-label="Node-RED flow"><text class="dg-s" x="20" y="24">Telemetry: parse, enrich, store, check alert rules</text><text class="dg-s" x="20" y="232">Device status: retained online/offline, last will</text>';
+  const mid = n => n.wires.map((_, p) => n.wires.length === 1 ? n.y + NR_H / 2 : n.y + 11 + p * 12);
+  for (const n of NR.nodes) {
+    n.wires.forEach((targets, port) => targets.forEach(id => {
+      const t = NR.byId[id], x1 = n.x + NR_W, y1 = mid(n)[port], x2 = t.x, y2 = t.y + NR_H / 2;
+      s += '<path class="dg-wire" d="M' + x1 + " " + y1 + " C" + (x1 + 55) + " " + y1 + " " + (x2 - 55) + " " + y2 + " " + x2 + " " + y2 + '"/>';
+    }));
+  }
+  for (const n of NR.nodes) {
+    s += '<g class="nrnode" tabindex="0" role="button" data-id="' + n.id + '" aria-label="' + esc(n.type + " " + n.name) + '">';
+    s += '<rect class="body" x="' + n.x + '" y="' + n.y + '" width="' + NR_W + '" height="' + NR_H + '" rx="6" style="fill:var(' + NR_HUE[n.type] + ');stroke:var(--surface)" stroke-width="1.5"/>';
+    s += '<text x="' + (n.x + 12) + '" y="' + (n.y + 21) + '" style="font:600 12px var(--f-mono);fill:var(--on-accent)">' + esc(n.name) + "</text>";
+    if (n.type !== "mqtt in") s += '<circle cx="' + n.x + '" cy="' + (n.y + NR_H / 2) + '" r="4.5" style="fill:var(--surface);stroke:var(--muted)" stroke-width="1.5"/>';
+    mid(n).forEach(y => { s += '<circle cx="' + (n.x + NR_W) + '" cy="' + y + '" r="4.5" style="fill:var(--surface);stroke:var(--muted)" stroke-width="1.5"/>'; });
+    s += '<text class="nrstat" id="nrc-' + n.id + '" x="' + (n.x + NR_W / 2) + '" y="' + (n.y + NR_H + 15) + '" text-anchor="middle"></text></g>';
+  }
+  $("#nrCanvas").innerHTML = s + "</svg>";
+  $("#nrCanvas").onclick = e => { const g = e.target.closest(".nrnode"); if (g) nrSelect(g.dataset.id); };
+  $("#nrCanvas").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { const g = e.target.closest(".nrnode"); if (g) { e.preventDefault(); nrSelect(g.dataset.id); } } };
+}
+function nrSelect(id) {
+  const n = NR.byId[id]; if (!n) return;
+  NR.sel = id;
+  $$(".nrnode").forEach(g => g.classList.toggle("sel", g.dataset.id === id));
+  const info = { "mqtt in": "subscribes to " + n.topic, json: "parses msg.payload from a string into an object", "influxdb out": "writes points to the " + n.name + " table", "mqtt out": "publishes msg.topic and msg.payload to the broker", debug: "prints msg.payload in the debug panel", function: n.wires.length + " output" + (n.wires.length > 1 ? "s" : "") + ", edit the code below and press Deploy" }[n.type];
+  $("#nrInfo").textContent = n.type + " · " + n.name + ": " + info;
+  const ide = UI.ides.nr;
+  if (n.file && ide && ide.cur.id !== n.file) ide.open(n.file);
+}
+function nrViewInit() {
+  nrBuild();
+  const deploy = ide => {
+    const errs = nrDeploy();
+    if (errs.length) ide.status("Deploy failed: " + errs[0], "bad");
+    else { ide.status("Deployed at " + hms(SIM.now) + ". Changes apply to the next message.", "ok"); NR.debug.push({ t: SIM.now, node: "flow", level: "log", text: "Deployed " + NR.nodes.filter(n => n.type === "function").length + " function nodes" }); }
+  };
+  UI.ides.nr = createIDE($("#ide-nr"), {
+    files: [filesRef("nr-enrich"), filesRef("nr-alert"), filesRef("nr-status")], hue: "var(--h-nr)", height: 440,
+    actions: [{ label: "Deploy", primary: true, onClick: deploy }], onRun: deploy,
+    onOpen: id => { const n = NR.nodes.find(x => x.file === id); if (n && NR.sel !== n.id && UI.ides.nr) nrSelect(n.id); }
+  });
+  nrSelect("fn_enrich");
+  $("#nrDebugClear").onclick = () => { NR.debug = []; nrSlow(); };
+}
+function nrSlow() {
+  for (const n of NR.nodes) {
+    const el = $("#nrc-" + n.id); if (!el) continue;
+    const t = n.err ? "error: " + clip(n.err, 26) : n.count + " msg";
+    if (el.textContent !== t) el.textContent = t;
+    el.setAttribute("class", "nrstat" + (n.err ? " bad" : ""));
+  }
+  $("#nrDebug").innerHTML = NR.debug.slice(-60).reverse().map(d => '<div><span class="t">' + hms(d.t) + '</span> <span class="tp">' + esc(d.node) + "</span> " + (d.level === "error" ? '<span class="err">' : d.level === "warn" ? '<span class="wr">' : "<span>") + esc(d.text) + "</span></div>").join("") || '<span class="sys">Nothing yet. Debug nodes print here.</span>';
+}
+
+/* ---- InfluxDB ---- */
+function influxInit() {
+  UI.ides.sql = createIDE($("#ide-sql"), {
+    files: ["sql-series", "sql-levels", "sql-track", "sql-link", "sql-alerts", "sql-scratch"].map(filesRef), hue: "var(--h-influx)", height: 330,
+    actions: [{ label: "Run", primary: true, onClick: () => runSql() }], onRun: () => runSql(),
+    onOpen: () => { if (UI.ides.sql) runSql(); }
+  });
+  Chart.attach($("#sqlChart"));
+  $$("#sqlView button").forEach(b => { b.onclick = () => { UI.sqlView = b.dataset.v; $$("#sqlView button").forEach(x => x.classList.toggle("on", x === b)); renderSql(); }; });
+}
+function runSql() {
+  const ide = UI.ides.sql; if (!ide) return;
+  const { text, offset } = ide.stmt();
+  try {
+    const res = SQL.run(text);
+    UI.sqlRes = res; UI.sqlRan = true; spawnPacket("e4");
+    $("#sqlErr").hidden = true;
+    if (ide.errLine) ide.markError(0);
+    ide.status(res.rows.length + " rows in " + res.ms.toFixed(1) + " ms", "ok");
+    renderSql();
+  } catch (e) {
+    UI.sqlRes = null;
+    const err = $("#sqlErr"); err.hidden = false; err.textContent = e.message;
+    $("#sqlChartBox").hidden = true; $("#sqlTableBox").hidden = true; $("#sqlMeta").textContent = "";
+    let pos = e.pos || 0;
+    if (!pos) { const m = /^\s*(?!--)\S/m.exec(text); pos = m ? m.index + m[0].length - 1 : 0; }
+    ide.markError(ide.lineAt(offset + pos));
+    ide.status("Error: " + clip(e.message, 70), "bad");
+  }
+}
+function renderSql() {
+  const res = UI.sqlRes; if (!res) return;
+  const spec = resultToChart(res);
+  const showChart = UI.sqlView === "chart" && spec;
+  $("#sqlMeta").textContent = res.rows.length + " rows · " + res.scanned + " scanned · " + res.ms.toFixed(1) + " ms" + (UI.sqlView === "chart" && !spec ? " · nothing to chart, showing table" : "");
+  $("#sqlChartBox").hidden = !showChart; $("#sqlTableBox").hidden = !!showChart;
+  if (showChart) { $("#sqlLegend").innerHTML = Chart.legend(spec.series); Chart.draw($("#sqlChart"), spec); }
+  else {
+    const rows = res.rows.slice(0, 300);
+    $("#sqlTableBox").innerHTML = rows.length ? '<table class="tbl"><thead><tr>' + res.columns.map(c => "<th>" + esc(c.name) + "</th>").join("") + "</tr></thead><tbody>" + rows.map(r => "<tr>" + r.map((v, i) => "<td>" + esc(fmtVal(v, res.columns[i].time)) + "</td>").join("") + "</tr>").join("") + "</tbody></table>" + (res.rows.length > 300 ? '<p class="note">Showing the first 300 rows.</p>' : "") : '<div class="empty">The query ran and returned no rows.</div>';
+  }
+}
+function influxSlow() {
+  $("#schema").innerHTML = [...INFLUX.tables.values()].map(t => '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;gap:8px"><b class="mono">' + esc(t.name) + '</b><span class="note num">' + t.rows.length + ' rows</span></div><table class="tbl"><tbody>' + [...t.cols.entries()].map(([k, v]) => "<tr><td>" + esc(k) + '</td><td style="color:var(--muted)">' + esc(v) + "</td></tr>").join("") + "</tbody></table></div>").join("");
+  $("#writeLog").innerHTML = INFLUX.writeLog.slice(-10).reverse().map(l => "<div>" + esc(l) + "</div>").join("");
+  if ($("#sqlLive").checked && performance.now() - UI.liveAt > 1900) { UI.liveAt = performance.now(); runSql(); }
+}
+
+/* ---- dashboard ---- */
+const W_RANGE = "WHERE time > now() - interval '$range'";
+const DASH_PANELS = [
+  { id: "angle", title: "Angle vs setpoint", cls: "p8", kind: "line", sql: "-- 1-second buckets over the selected range\nSELECT date_bin(interval '1 second', time) AS t,\n       round(avg(angle), 2)    AS angle,\n       round(avg(setpoint), 2) AS setpoint\nFROM servo\n" + W_RANGE + "\nGROUP BY 1\nORDER BY 1;" },
+  { id: "gauge", title: "Shaft now", cls: "p4", kind: "gauge", sql: "-- latest reported angle and setpoint\nSELECT last_value(angle ORDER BY time)    AS angle,\n       last_value(setpoint ORDER BY time) AS setpoint\nFROM servo\nWHERE time > now() - interval '30 seconds';" },
+  { id: "current", title: "Servo current (mA)", cls: "p6", kind: "line", area: true, ref: 350, refLabel: "alert at 350 mA", sql: "-- peak current per second; the dashed line is the alert threshold\nSELECT date_bin(interval '1 second', time) AS t,\n       max(current_ma) AS peak_ma\nFROM servo\n" + W_RANGE + "\nGROUP BY 1\nORDER BY 1;" },
+  { id: "error", title: "Tracking error, RMS per 5 s (degrees)", cls: "p6", kind: "bar", sql: "SELECT date_bin(interval '5 seconds', time) AS t,\n       round(sqrt(avg(error * error)), 2) AS rms_error\nFROM servo\n" + W_RANGE + "\nGROUP BY 1\nHAVING count(*) > 5\nORDER BY 1;" },
+  { id: "temp", title: "Servo temperature (°C)", cls: "p4", kind: "line", sql: "SELECT date_bin(interval '5 seconds', time) AS t,\n       round(avg(temp_c), 2) AS temp_c\nFROM servo\n" + W_RANGE + "\nGROUP BY 1\nORDER BY 1;" },
+  { id: "lamp", title: "Lamp vs LDR brightness (%)", cls: "p4", kind: "line", sql: "-- the lamp setting and the brightness the LDR measures, both as percent of full light\nSELECT date_bin(interval '1 second', time) AS t,\n       round(avg(lamp), 1)      AS lamp_pct,\n       round(avg(lux) / 8.0, 1) AS brightness_pct\nFROM servo\n" + W_RANGE + "\nGROUP BY 1\nORDER BY 1;" },
+  { id: "link", title: "Messages stored per 5 s (25 is healthy)", cls: "p4", kind: "bar", ref: 25, refLabel: "25", sql: "SELECT date_bin(interval '5 seconds', time) AS t,\n       count(*) AS msgs\nFROM servo\n" + W_RANGE + "\nGROUP BY 1\nORDER BY 1;" },
+  { id: "alerts", title: "Recent alerts", cls: "p12", kind: "table", sql: "SELECT time, device, kind, value\nFROM alerts\nORDER BY time DESC\nLIMIT 8;" }
+];
+const DASH_TILES = [
+  { label: "Samples stored", sql: "SELECT count(*) FROM servo " + W_RANGE, unit: "", d: 0 },
+  { label: "Mean position error", sql: "SELECT round(avg(abs(error)), 2) FROM servo " + W_RANGE, unit: "°", d: 2, warn: 2, bad: 5 },
+  { label: "Peak current", sql: "SELECT max(current_ma) FROM servo " + W_RANGE, unit: " mA", d: 0, warn: 250, bad: 350 },
+  { label: "Temperature", sql: "SELECT round(last_value(temp_c ORDER BY time), 1) FROM servo WHERE time > now() - interval '30 seconds'", unit: "°C", d: 1, warn: 45, bad: 55 },
+  { label: "Link delivery", sql: "SELECT least(100, round(100.0 * count(*) / (((max(time) - min(time)) / 1000) * 5 + 1), 0)) FROM servo " + W_RANGE, unit: "%", d: 0, low: true, warn: 98, bad: 85 },
+  { label: "Alerts raised", sql: "SELECT count(*) FROM alerts " + W_RANGE, unit: "", d: 0, warn: 1, bad: 4 }
+];
+const macros = () => ({ "$rangeSec": UI.rangeSec, "$range": UI.rangeText });
+
+function dashInit() {
+  DASH_PANELS.forEach(p => FILES.add("dash-" + p.id, p.id + ".sql", "sql", p.sql));
+  $("#dashGrid").innerHTML = DASH_PANELS.map(p => '<div class="card ' + p.cls + '" id="dp-' + p.id + '"><div class="hd"><h2>' + esc(p.title) + '</h2><button class="btn sm" data-edit="' + p.id + '">Edit query</button></div><div class="perr" hidden></div>' +
+    (p.kind === "table" ? '<div class="tbl-wrap pbody"></div>' : p.kind === "gauge" ? '<div class="gauge-wrap pbody"></div>' : '<div class="legend"></div><div class="chartbox pbody"><canvas class="chart"></canvas><div class="tip"></div></div>') + "</div>").join("");
+  $$("#dashGrid canvas").forEach(Chart.attach);
+  const run = thr(() => dashRefresh(), 400);
+  UI.ides.dash = createIDE($("#ide-dash"), {
+    files: DASH_PANELS.map(p => filesRef("dash-" + p.id)), hue: "var(--h-dash)", height: 240,
+    actions: [{ label: "Run", primary: true, onClick: () => dashRefresh() }, { label: "Close", onClick: () => { $("#dashEditor").hidden = true; } }],
+    onRun: () => dashRefresh(), onChange: () => run(),
+    onOpen: id => { const p = DASH_PANELS.find(x => "dash-" + x.id === id); if (p) $("#dashEditTitle").textContent = "Edit panel: " + p.title; }
+  });
+  $("#dashGrid").onclick = e => { const b = e.target.closest("[data-edit]"); if (!b) return; $("#dashEditor").hidden = false; UI.ides.dash.open("dash-" + b.dataset.edit); $("#dashEditor").scrollIntoView({ block: "nearest", behavior: "smooth" }); };
+  $$("#rangeSeg button").forEach(b => { b.onclick = () => { UI.rangeText = b.dataset.r; UI.rangeSec = parseInt(b.dataset.r, 10) * (/minute/.test(b.dataset.r) ? 60 : 1); $$("#rangeSeg button").forEach(x => x.classList.toggle("on", x === b)); dashRefresh(); }; });
+}
+function dashRefresh() {
+  spawnPacket("e4");
+  const mc = macros();
+  $("#tiles").innerHTML = DASH_TILES.map(t => {
+    let v = null, err = "";
+    try { const r = SQL.run(t.sql, mc); v = r.rows[0] ? r.rows[0][0] : null; } catch (e) { err = e.message; }
+    let st = "";
+    if (v != null && t.bad != null) st = t.low ? (v < t.bad ? "bad" : v < t.warn ? "warn" : "") : (v >= t.bad ? "bad" : v >= t.warn ? "warn" : "");
+    return '<div class="tile ' + st + '"><span>' + esc(t.label) + "</span><b>" + (v == null ? "--" : esc(Number(v).toFixed(t.d))) + "<small>" + esc(t.unit.trim()) + "</small></b><em>" + (err ? esc(clip(err, 40)) : "last " + esc(UI.rangeText.replace("minutes", "min").replace("minute", "min").replace("seconds", "s"))) + "</em></div>";
+  }).join("");
+  for (const p of DASH_PANELS) {
+    const root = $("#dp-" + p.id), perr = $(".perr", root), body = $(".pbody", root);
+    try {
+      const res = SQL.run(FILES.get("dash-" + p.id), mc);
+      perr.hidden = true; body.hidden = false;
+      if (p.kind === "gauge") { const r = res.rows[0] || [90, 90]; body.innerHTML = gaugeSvg(r[0] == null ? 90 : r[0], r[1] == null ? 90 : r[1]); continue; }
+      if (p.kind === "table") {
+        body.innerHTML = res.rows.length ? '<table class="tbl"><thead><tr>' + res.columns.map(c => "<th>" + esc(c.name) + "</th>").join("") + "</tr></thead><tbody>" + res.rows.map(r => "<tr>" + r.map((v, i) => "<td>" + esc(fmtVal(v, res.columns[i].time)) + "</td>").join("") + "</tr>").join("") + "</tbody></table>" : '<div class="empty">No alerts in the database yet.</div>';
+        continue;
+      }
+      const spec = resultToChart(res, { kind: p.kind, ref: p.ref, refLabel: p.refLabel, area: p.area });
+      $(".legend", root).innerHTML = spec ? Chart.legend(spec.series) : "";
+      Chart.draw($("canvas", root), spec || { kind: "line", xTime: false, x: [], series: [], empty: "The query needs a first column for the x axis and at least one numeric column" });
+    } catch (e) {
+      perr.hidden = false; perr.textContent = e.message; body.hidden = true; const lg = $(".legend", root); if (lg) lg.innerHTML = "";
+    }
+  }
+}
+
+/* ---- real stack ---- */
+function stackInit() {
+  const flows = { id: "flows", name: "flows.json", lang: "json", readOnly: true, get: nrExportFlows, set() {}, reset() {} };
+  UI.ides.stack = createIDE($("#ide-stack"), { files: [filesRef("stack-compose"), filesRef("stack-setup"), flows], hue: "var(--muted)", height: 480 });
+}
+
+/* ---- periodic updates ---- */
+function fastUpdate() { if (UI.tab === "lab") labFast(); }
+function slowUpdate() {
+  $("#clk").textContent = hms(SIM.now);
+  $("#mps").textContent = BROKER.rate().toFixed(1);
+  $("#rows").textContent = INFLUX.count().toLocaleString("en-US");
+  ({ lab: labSlow, esp: espSlow, mqtt: mqttSlow, nr: nrSlow, influx: influxSlow })[UI.tab]?.();
+}
+/* ============ Boot and main loop ============ */
+function boot() {
+  FILES.init();
+  nrInit();                      // Node-RED connects to the broker and deploys its function nodes
+  webuiInit();                   // the dashboard's own MQTT client
+  seedHistory();                 // fast-forward three minutes of recorded history
+
+  labInit(); espInit(); mqttInit(); nrViewInit(); influxInit(); dashInit(); stackInit();
+
+  $$(".tab").forEach(b => { b.onclick = () => showTab(b.dataset.tab); });
+  $("#logFilter").oninput = () => { if (UI.tab === "mqtt") mqttSlow(); };
+
+  bus.on("publish", e => {
+    if (e.from === DEVICE_ID && /\/state$/.test(e.topic)) spawnPacket("e1");
+    if (e.from === "web-ui") spawnPacket("cmd");
+  });
+  bus.on("deliver", d => {
+    if (!/\/state$/.test(d.topic)) return;
+    if (d.to === "node-red") spawnPacket("e2");
+    else if (d.to === "web-ui") spawnPacket("fb");
+  });
+  bus.on("nr-write", w => { if (w.node === "out_servo") spawnPacket("e3"); });
+  bus.on("alert", a => { toast(String(a.kind).replace(/_/g, " "), (a.text || "") + " (" + a.value + ")"); });
+  bus.on("esp-state", () => { if (ESP.state === "crashed") toast("ESP32 crashed", ESP.err || "see the serial monitor"); });
+
+  const h = (location.hash || "").replace("#", "");
+  showTab(TABS.includes(h) ? h : "lab");
+  fastUpdate();
+
+  let lastReal = performance.now(), acc = 0, lastFast = 0, lastSlow = 0, lastDash = 0, lastHw = 0;
+  function frame(now) {
+    acc += Math.min(now - lastReal, 120); lastReal = now;
+    while (acc >= SIM.dt) { simStep(); acc -= SIM.dt; }
+    if (now - lastHw > 33) { lastHw = now; hwUpdate(); }
+    packetsTick(now);
+    if (now - lastFast > 100) { lastFast = now; fastUpdate(); }
+    if (now - lastSlow > 250) { lastSlow = now; slowUpdate(); }
+    if (UI.tab === "dash" && now - lastDash > 1000) { lastDash = now; dashRefresh(); }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+boot();
+</script>
+
+</body></html>
